@@ -45,6 +45,7 @@ class Connection
 
     constructor: (@name, @flow, source, sink, @channels) ->
         @source = @flow.getSystem(source)
+        console.log(@source)
         @sink = @flow.getSystem(sink)
 
     serialize: ->
@@ -66,21 +67,25 @@ class Message
 
     constructor: (@event, @payload) ->
 
+class Entity
+
+    constructor: (@name) ->
+
 class StateBus
 
     constructor: ->
         @entities = {}
         @discreteSystems = {}
 
-    addEntity: (entity) ->
-        @entities[entiy.name] = entity
+    createEntity: (name) ->
+        @entities[name] = new Entity()
+        @entities[name]
 
     getEntity: (name, create) ->
         if @entities[name]
             return @entities[name]
         else if create
-            @entities[name] = {}
-            return @entities[name]
+            return this.createEntity(name)
         else
             return null
 
@@ -93,11 +98,11 @@ class StateBus
             else
                 @discreteSystems[event].systems.append(discrete_system)
 
-        trigger: (event, message) ->
+    trigger: (event, message) ->
 
-            for system in @discreteSystems[event]
-                message =- Message(event, message)
-                system.raise(message)
+        for system in @discreteSystems[event]
+            message =- Message(event, message)
+            system.raise(message)
 
 class Flow
 
@@ -134,15 +139,13 @@ class Flow
 
     start: ->
 
-        for connection in @connections
+        for conn in @connections
 
-            A = connection.source
-            B = connection.sink
+            A = conn.source
+            B = conn.sink
 
-            this.log("#{A.name} -- #{B.name}")
-
-            if connection.channels
-                for channel in connection.channels
+            if conn.channels
+                for channel in conn.channels
                     A.whenReady(((data) ->
                         B.push(inlet, data)),
                         A.channel.outlet)
