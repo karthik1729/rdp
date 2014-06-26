@@ -1,18 +1,33 @@
 class System
 
     constructor:(@name, @flow) ->
-        @handlers = {}
+        @handlers = null
 
-    push: (inlet, data) ->
+    # just data for single inlet
+    push: (data, inlet) ->
 
-    whenReady: (outelt, handler) ->
+    whenReady: (handler, outlet) ->
 
-        if @handlers.outlet is null
-            @handlers.outlet = [handler]
+        if not outlet
+            if @handlers
+                @handlers.push(handler)
+            else
+               @handlers = [handler]
+
         else
-            @handlers.outlet.push handler
+            if @handlers.outlet is null
+                @handlers.outlet = [handler]
+            else
+                @handlers.outlet.push handler
 
-    emit: ->
+    emit: (data, outlet) ->
+
+        if not outlet
+            for handler in @handlers
+                handler(data)
+        else
+            for handler in @handlers[outlet]
+                handler(data)
 
     serialize: ->
         """
@@ -28,21 +43,24 @@ class Channel
 
 class Connection
 
-    constructor: (@name, @source, @sink, @channels)->
+    constructor: (@name, @flow, source, sink, @channels) ->
+        @source = @flow.getSystem(source)
+        @sink = @flow.getSystem(sink)
 
     serialize: ->
             xml = """
-            <connection name='#{@name}'>"
+            <connection name='#{@name}'>
                 #{@source.serialize()}
                 #{@sink.serialize()}
             """
-            xml += "<channels>"
-            for channel in @channels
-                xml += channel.serialize()
-            xml += """
-                </channels>
-            </connection>
-            """
+
+            if @channels
+                xml += "<channels>"
+                for channel in @channels
+                    xml += channel.serialize()
+                xml += "</channels>"
+
+            xml += "</connection>"
 
 class Message
 
@@ -57,7 +75,16 @@ class StateBus
     addEntity: (entity) ->
         @entities[entiy.name] = entity
 
-    addDiscreteSystem(discrete_system, events) ->
+    getEntity: (name, create) ->
+        if @entities[name]
+            return @entities[name]
+        else if create
+            @entities[name] = {}
+            return @entities[name]
+        else
+            return null
+
+    addDiscreteSystem: (discrete_system, events) ->
 
         for event in events
 
@@ -77,17 +104,18 @@ class Flow
     constructor: ->
 
         # could be a ordered map
-
         @connections = []
-        @objectStore = new ObjectStore
         @bus = new StateBus
         @systems = {}
 
-    addSystem: (name, inlets, outlets) ->
-        @systems[name] = system
+    addSystem: (system) ->
+        @systems[system.name] = system
 
-    connect: (connection) ->
-        @connections[connection.name] = connection
+    getSystem: (name) ->
+        @systems[name]
+
+    addConnection: (connection) ->
+        @connections.push(connection)
 
     serialize: ->
         xml = "<xml>"
@@ -101,16 +129,26 @@ class Flow
         xml = "</flow>"
         xml = "</xml>"
 
+    log: (x) ->
+        console.log(x)
+
     start: ->
 
-        for connection in connections
-            A = connection.from
-            B = connection.to
+        for connection in @connections
 
-            for channel in connection.channels
+            A = connection.source
+            B = connection.sink
 
-                A.whenReady A.channel.outlet,  (data) ->
-                    B.push(inlet, data)
+            this.log("#{A.name} -- #{B.name}")
+
+            if connection.channels
+                for channel in connection.channels
+                    A.whenReady(((data) ->
+                        B.push(inlet, data)),
+                        A.channel.outlet)
+            else
+                A.whenReady (data) ->
+                    B.push(data)
 
 
 exports.System = System

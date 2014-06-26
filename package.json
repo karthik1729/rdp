@@ -30,6 +30,7 @@
     "gulp": "*",
     "gulp-util": "*",
     "gulp-coffee": "*",
-    "gulp-sourcemaps": "*"
+    "gulp-sourcemaps": "*",
+    "lodash": "*"
   }
 }
