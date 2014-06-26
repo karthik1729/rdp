@@ -112,3 +112,11 @@ class Flow
                 A.whenReady A.channel.outlet,  (data) ->
                     B.push(inlet, data)
 
+
+exports.System = System
+exports.Channel = Channel
+exports.Connection = Connection
+exports.Message = Message
+exports.StateBus = StateBus
+exports.Flow = Flow
+

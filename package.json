@@ -26,6 +26,10 @@
   ],
   "scripts": { "test": "node test.js" },
   "devDependencies": {
-    "nodeunit": "^0.8.6"
+    "nodeunit": "^0.8.6",
+    "gulp": "*",
+    "gulp-util": "*",
+    "gulp-coffee": "*",
+    "gulp-sourcemaps": "*"
   }
 }
