@@ -6,37 +6,34 @@ _super = rdp.System;
 
 function Bang(name, flow) {
 
+    var self = this;
     yx.__extends(this, _super);
 
     this.__super__.constructor.apply(this, arguments);
 
-    this.push = function (data) {
-        this.__super__.emit("bang");
-    }
-
-    this.bang = function (bang) {
-        this.push("bang");
+    this.bang = function () {
+        self.prototype.emit("bang");
     }
 
 }
 
 function ArrayGenerator(name,flow) {
 
+    var self = this;
     yx.__extends(this, _super);
-
 
     this.__super__.constructor.apply(this, arguments);
     this.values = [];
 
     var i = 1;
     do {
-        this.values.push(i++);
+       this.values.push(i++);
     } while(i < 100);
 
-    this.push = function (data) {
+    this.prototype.push = function (data) {
         if (data == "bang") {
-            _.map(this.values, function (e) {
-                this.__super__.emit(e);
+            _.map(self.values, function (e) {
+                self.prototype.emit(e);
             });
         }
     }
@@ -45,22 +42,30 @@ function ArrayGenerator(name,flow) {
 
 function RangeAverageFilter (name, flow) {
 
-    yx.__extends(this, _super);
+   var self = this;
+   yx.__extends(this, _super);
 
    this.__super__.constructor.apply(this, arguments);
 
-    this.push = function (data) {
-        var range = RangeAverageFilter.__super__.flow.bus.getEntity("range", true);
+    this.prototype.push = function (data) {
+        var range = self.flow.bus.getEntity("range", true);
 
-        if (range.length == 5) {
+        if (!range.value) {
+            range.value = [data];
+        } else {
+            range.value.push(data);
+        }
+
+        if (range.value.length == 5) {
             var sum = 0;
-            _.map(range, function (e) {
+            _.map(range.value, function (e) {
                 sum += e;
             });
 
             var avg = sum / 5;
 
-            this.__super__.emit(avg);
+            self.prototype.emit(avg);
+            range.value.pop();
         }
     }
 
@@ -68,11 +73,12 @@ function RangeAverageFilter (name, flow) {
 
 function ConsoleDumper(name, flow) {
 
+    var self = this;
     yx.__extends(this, _super);
 
     this.__super__.constructor.apply(this, arguments);
 
-    this.push = function (data) {
+    this.prototype.push = function (data) {
         console.log(data);
     }
 
@@ -86,7 +92,5 @@ flow.addSystem(new RangeAverageFilter("range-avg1", flow));
 flow.addConnection(new rdp.Connection("array-avg-filter", flow, "gen1", "range-avg1"));
 flow.addSystem(new ConsoleDumper("condump", flow));
 flow.addConnection(new rdp.Connection("dumper",  flow, "range-avg1", "condump"));
-flow.start();
-
-flow.systems["bang1"].push("bang");
+flow.systems["bang1"].bang();
 

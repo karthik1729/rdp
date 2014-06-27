@@ -9,6 +9,12 @@ Install
 API
 ===
 
+see [example](https://github.com/harsha-mudi/rdp/master/examples/array.js).
+
+Status
+======
+
+Alpha
 
 
 

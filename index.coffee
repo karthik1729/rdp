@@ -9,16 +9,16 @@ class System
     whenReady: (handler, outlet) ->
 
         if not outlet
-            if @handlers
+            if @handlers == null
                 @handlers.push(handler)
             else
                @handlers = [handler]
 
         else
-            if @handlers.outlet is null
+            if @handlers == null
                 @handlers.outlet = [handler]
             else
-                @handlers.outlet.push handler
+                @handlers.outlet.push(handler)
 
     emit: (data, outlet) ->
 
@@ -44,9 +44,20 @@ class Channel
 class Connection
 
     constructor: (@name, @flow, source, sink, @channels) ->
+        self = this
         @source = @flow.getSystem(source)
-        console.log(@source)
         @sink = @flow.getSystem(sink)
+        @flow.log("#{@source.name} ---> #{@name} ---> #{@sink.name}")
+
+        if @channels
+            for channel in @channels
+                @source.prototype.whenReady(((data) ->
+                    self.sink.prototype.push(channel.inlet, data)),
+                    channel.outlet)
+        else
+            @source.prototype.whenReady (data) ->
+                # self.flow.log(data)
+                self.sink.prototype.push(data)
 
     serialize: ->
             xml = """
@@ -78,14 +89,14 @@ class StateBus
         @discreteSystems = {}
 
     createEntity: (name) ->
-        @entities[name] = new Entity()
+        @entities[name] = new Entity(name)
         @entities[name]
 
     getEntity: (name, create) ->
         if @entities[name]
             return @entities[name]
         else if create
-            return this.createEntity(name)
+            return @createEntity(name)
         else
             return null
 
@@ -137,21 +148,6 @@ class Flow
     log: (x) ->
         console.log(x)
 
-    start: ->
-
-        for conn in @connections
-
-            A = conn.source
-            B = conn.sink
-
-            if conn.channels
-                for channel in conn.channels
-                    A.whenReady(((data) ->
-                        B.push(inlet, data)),
-                        A.channel.outlet)
-            else
-                A.whenReady (data) ->
-                    B.push(data)
 
 
 exports.System = System
