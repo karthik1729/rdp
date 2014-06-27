@@ -1,7 +1,7 @@
 {
   "name": "rdp",
   "version": "0.1.0",
-  "description": "library for reactive data flow programming",
+  "description": "Reactive Data Flow Programming for Javascript",
   "author": "Sreeharsha Mudivarti",
   "license": "MIT",
   "homepage": "https://github.com/harsha-mudi/rdp",
@@ -31,6 +31,7 @@
     "gulp-util": "*",
     "gulp-coffee": "*",
     "gulp-sourcemaps": "*",
-    "lodash": "*"
+    "lodash": "*",
+    "yx": "*"
   }
 }
