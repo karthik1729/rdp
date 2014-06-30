@@ -1,0 +1,37 @@
+{
+  "name": "rdp",
+  "version": "0.1.1",
+  "description": "Reactive Data Flow Programming for Javascript",
+  "author": "Sreeharsha Mudivarti",
+  "license": "Apache 2",
+  "homepage": "https://github.com/harsha-mudi/rdp",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/harsha-mudi/rdp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/harsha-mudi/rdp/issues"
+  },
+  "keywords": [
+    "reactive",
+    "data",
+    "flow",
+    "data flow",
+    "pipe",
+    "unix",
+    "streams",
+    "entity systems",
+    "message bus",
+    "state"
+  ],
+  "scripts": { "test": "node test.js" },
+  "devDependencies": {
+    "nodeunit": "^0.8.6",
+    "gulp": "*",
+    "gulp-util": "*",
+    "gulp-coffee": "*",
+    "gulp-sourcemaps": "*",
+    "lodash": "*",
+    "yx": "*"
+  }
+}
