@@ -2,6 +2,9 @@ class System
 
     constructor:(@name, @flow) ->
         @handlers = null
+        @status = null
+        @buffer = []
+        @flow.systems[@name] = this
 
     # just data for single inlet
     push: (data, inlet) ->
@@ -20,14 +23,41 @@ class System
             else
                 @handlers.outlet.push(handler)
 
-    emit: (data, outlet) ->
+    start: ->
+        @status = "start"
+    pause: ->
+        @status = "pause"
+    resume: ->
+        @status = "resume"
+    end: ->
+        @status = "end"
 
+    canStart: ->
+        if (@status is "start") or (@status is "resume")
+            return true
+        else
+            return false
+
+    send: (data, outlet) ->
         if not outlet
             for handler in @handlers
                 handler(data)
         else
             for handler in @handlers[outlet]
                 handler(data)
+
+    emit: (data, outlet) ->
+
+        if @buffer.length is 0
+            @send(data, outlet)
+
+        else
+            @flush()
+
+    flush: (outlet) ->
+        if @buffer.length != 0
+            data, outlet = buffer.pop()
+            @send(data, outlet)
 
     serialize: ->
         """
@@ -59,6 +89,8 @@ class Connection
                 # self.flow.log(data)
                 self.sink.prototype.push(data)
 
+       @flow.connections.push(this)
+
     serialize: ->
             xml = """
             <connection name='#{@name}'>
@@ -80,7 +112,7 @@ class Message
 
 class Entity
 
-    constructor: (@name) ->
+    constructor: (@name, @tags) ->
 
 class StateBus
 
@@ -88,8 +120,9 @@ class StateBus
         @entities = {}
         @discreteSystems = {}
 
-    createEntity: (name) ->
-        @entities[name] = new Entity(name)
+    createEntity: (name, tags) ->
+        tags = tags || []
+        @entities[name] = new Entity(name, tags)
         @entities[name]
 
     getEntity: (name, create) ->
@@ -99,6 +132,15 @@ class StateBus
             return @createEntity(name)
         else
             return null
+
+    getEntitiesByTags: (tags) ->
+        entities = []
+        for entity in @entities
+            for tag in tags
+                if tag in entity.tags
+                    entities.push entity
+
+        return entities
 
     addDiscreteSystem: (discrete_system, events) ->
 
@@ -112,7 +154,7 @@ class StateBus
     trigger: (event, message) ->
 
         for system in @discreteSystems[event]
-            message =- Message(event, message)
+            message = Message(event, message)
             system.raise(message)
 
 class Flow
@@ -124,14 +166,13 @@ class Flow
         @bus = new StateBus
         @systems = {}
 
-    addSystem: (system) ->
-        @systems[system.name] = system
-
     getSystem: (name) ->
         @systems[name]
 
-    addConnection: (connection) ->
-        @connections.push(connection)
+    getConnection: (name) ->
+        for connection in @connections:
+            if connection.name == name
+                return connection
 
     serialize: ->
         xml = "<xml>"
@@ -154,6 +195,7 @@ exports.System = System
 exports.Channel = Channel
 exports.Connection = Connection
 exports.Message = Message
+exports.Entity = Entity
 exports.StateBus = StateBus
 exports.Flow = Flow
 
