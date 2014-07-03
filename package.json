@@ -1,6 +1,6 @@
 {
   "name": "rdp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Reactive Data Flow Programming for Javascript",
   "author": "Sreeharsha Mudivarti",
   "license": "Apache 2",
@@ -22,7 +22,10 @@
     "streams",
     "entity systems",
     "message bus",
-    "state"
+    "state",
+    "system",
+    "electronics",
+    "hardware"
   ],
   "scripts": { "test": "node test.js" },
   "devDependencies": {
