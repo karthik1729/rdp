@@ -98,12 +98,7 @@ T = (name) ->
 
 class Event extends Symbol
 
-    constructor: (@name, @context) ->
-
-class Message extends Symbol
-
-    constructor: (@type, @payload) ->
-        @name = "message." + @type
+    constructor: (@name, @payload) ->
 
 class Entity extends Symbol
 
@@ -114,7 +109,6 @@ class Component extends Symbol
     constructor: (@name, attrs) ->
         for k, v in attrs
             this[k] = v
-
 
 class System
 
@@ -153,7 +147,7 @@ class DiscreteSystem
 
     constructor: (@flow, @events) ->
 
-    raise: (message) ->
+    raise: (event) ->
 
 class Channel
 
@@ -166,8 +160,7 @@ class Connection
         @sink = @flow.systems.get(sink)
 
 
-
-class StateBus
+class Bus
 
     constructor: ->
         @entities = new NameSpace()
@@ -203,16 +196,16 @@ class StateBus
         return entities
 
 
-    trigger: (event, message) ->
+    trigger: (event) ->
 
-        for system in @discreteSystems[event]
-            message = Message(event, message)
-            system.raise(message)
+        for symbol in @discreteSystems.allSymbols()
+            if event.name in symbol.events
+                symbol.value.raise(event)
 
 class Flow
 
     constructor: (@id) ->
-        @bus = new StateBus
+        @bus = new Bus
         @systems = new NameSpace("systems")
         @connections = new NameSpace("systems.connections")
 
@@ -263,8 +256,8 @@ exports.NameSpace = NameSpace
 exports.System = System
 exports.Channel = Channel
 exports.Connection = Connection
-exports.Message = Message
+exports.Event = Event
 exports.Entity = Entity
-exports.StateBus = StateBus
+exports.Bus = Bus
 exports.Flow = Flow
 
