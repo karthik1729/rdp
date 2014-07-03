@@ -1,25 +1,11 @@
-var rdp = require("../index.js"),
+var $ = require("../index.js"),
     yx = require("yx"),
     _  = require("lodash");
 
-_super = rdp.System;
+var _super = $.System;
 
-function Bang(name, flow) {
+function ArrayGenerator(flow) {
 
-    var self = this;
-    yx.__extends(this, _super);
-
-    this.__super__.constructor.apply(this, arguments);
-
-    this.bang = function () {
-        self.prototype.emit("bang");
-    }
-
-}
-
-function ArrayGenerator(name,flow) {
-
-    var self = this;
     yx.__extends(this, _super);
 
     this.__super__.constructor.apply(this, arguments);
@@ -27,70 +13,64 @@ function ArrayGenerator(name,flow) {
 
     var i = 1;
     do {
-       this.values.push(i++);
+        this.values.push(i++);
     } while(i < 100);
-
-    this.prototype.push = function (data) {
-        if (data == "bang") {
-            _.map(self.values, function (e) {
-                self.prototype.emit(e);
-            });
-        }
-    }
 
 }
 
-function RangeAverageFilter (name, flow) {
+ArrayGenerator.prototype.push = function (token) {
+    if (token.start) {
+        _.map(this.values, function (e) {
+            this.__super__.emit.call(this, e);
+        }.bind(this));
+    }
+}
 
-   var self = this;
-   yx.__extends(this, _super);
+function RangeAverageFilter (flow) {
+    yx.__extends(this, _super);
+    this.range = {};
+    this.__super__.constructor.apply(this, arguments);
+}
 
-   this.__super__.constructor.apply(this, arguments);
+RangeAverageFilter.prototype.push = function (data) {
+    var range = this.range;
 
-    this.prototype.push = function (data) {
-        var range = self.flow.bus.getEntity("range", true);
-
-        if (!range.value) {
-            range.value = [data];
-        } else {
-            range.value.push(data);
-        }
-
-        if (range.value.length == 5) {
-            var sum = 0;
-            _.map(range.value, function (e) {
-                sum += e;
-            });
-
-            var avg = sum / 5;
-
-            self.prototype.emit(avg);
-            range.value.pop();
-        }
+    if (!range.value) {
+        range.value = [data];
+    } else {
+        range.value.push(data);
     }
 
+    if (range.value.length == 5) {
+        var sum = 0;
+        _.map(range.value, function (e) {
+            sum += e;
+        });
+
+        var avg = sum / 5;
+
+        this.__super__.emit.call(this, avg);
+        range.value.pop();
+    }
 }
 
 function ConsoleDumper(name, flow) {
-
-    var self = this;
     yx.__extends(this, _super);
-
     this.__super__.constructor.apply(this, arguments);
-
-    this.prototype.push = function (data) {
-        console.log(data);
-    }
-
 }
 
-var flow = new rdp.Flow();
-flow.addSystem(new Bang("bang1", flow));
-flow.addSystem(new ArrayGenerator("gen1", flow));
-flow.addConnection(new rdp.Connection("bang-gen", flow, "bang1", "gen1"));
-flow.addSystem(new RangeAverageFilter("range-avg1", flow));
-flow.addConnection(new rdp.Connection("array-avg-filter", flow, "gen1", "range-avg1"));
-flow.addSystem(new ConsoleDumper("condump", flow));
-flow.addConnection(new rdp.Connection("dumper",  flow, "range-avg1", "condump"));
-flow.systems["bang1"].bang();
+ConsoleDumper.prototype.push = function (data) {
+    console.log(data);
+}
+
+var flow = new $.Flow(new $.S("ex"));
+flow.addSystem(new $.S("gen1"), ArrayGenerator);
+flow.addSystem(new $.S("range-avg1"), RangeAverageFilter)
+flow.connect(new $.S("array-avg-filter"), "gen1", "range-avg1")
+flow.addSystem(new $.S("condump"), ConsoleDumper)
+flow.connect(new $.S("dumper"),"range-avg1", "condump")
+
+flow.systems.get("gen1").push(new $.T("start"));
+// flow.serialize();
+
 

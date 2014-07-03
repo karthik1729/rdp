@@ -1,44 +1,125 @@
+class NameSpace
+
+    constructor: (@name, sep) ->
+        @names = []
+        @symbols = {}
+        @sep = sep || "."
+
+    intern: (symbol) ->
+        if not @symbols[symbol.name]
+            @names.push(symbol.name)
+            @symbols[symbol.name] = symbol
+        else
+            @symbols[symbol.name] = symbol
+
+        symbol.ns = this
+
+    unintern: (symbol) ->
+        delete @symbols[symbol.name]
+        @names = (item for item in @names when item != symbol.name)
+        symbol.ns = undefined
+
+    getSymbol: (name) ->
+        @symbols[name]
+
+    get: (name) ->
+        @symbols[name].value
+
+    allSymbols: () ->
+        symbols = []
+
+        for name in @names
+            symbols.push(@symbols[name])
+
+        return symbols
+
+    all: () ->
+        values = []
+
+        for name in @names
+            values.push(@symbols[name].value)
+
+        return values
+
+
+class Symbol
+
+    constructor: (@name) ->
+        @attrs = {}
+        @value = undefined
+        @ns = undefined
+
+    is: (symbol, deep) ->
+       equality = {
+           names: -1
+           namespaces: -1
+           attrs: -1
+       }
+
+       if @name == symbol.name
+           equality.names = 1
+
+       if !@ns
+           equality.namespaces = 1
+       else if @ns and @ns.id is symbol.id
+           equality.namespaces = 1
+
+       equality.attrs = 1
+
+       for k,v in @attrs
+           if v != symbol.attrs.k
+               equality.attrs = -1
+
+       if deep
+           if equality.names == 1 and equality.namespaces ==1 and equality.attrs == 1
+               return true
+       else
+           if equality.names == 1 and equality.namespaces ==1
+               return true
+
+       return false
+
+    toString: ->
+       if @ns
+           return @ns.id + @ns.sep + @name
+        else
+           return @name
+
+class Token extends Symbol
+
+    constructor: (@name) ->
+        @value = @name
+        if typeof @name is "string"
+            this[@name] = true
+
 class System
 
-    constructor:(@name, @flow) ->
+    constructor:(@flow) ->
         @handlers = null
-        @status = null
-        @buffer = []
-        @flow.systems[@name] = this
 
-    # just data for single inlet
     push: (data, inlet) ->
 
+    # just data for single inlet
     whenReady: (handler, outlet) ->
 
         if not outlet
-            if @handlers == null
-                @handlers.push(handler)
+            if @handlers
+               @handlers.push(handler)
             else
+               console.log(this)
                @handlers = [handler]
 
         else
-            if @handlers == null
-                @handlers.outlet = [handler]
-            else
+            if @handlers
                 @handlers.outlet.push(handler)
+            else
+                @handlers.outlet = [handler]
 
-    start: ->
-        @status = "start"
-    pause: ->
-        @status = "pause"
-    resume: ->
-        @status = "resume"
-    end: ->
-        @status = "end"
 
-    canStart: ->
-        if (@status is "start") or (@status is "resume")
-            return true
-        else
-            return false
 
-    send: (data, outlet) ->
+    emit: (data, outlet) ->
+        #        console.log(data)
+        # console.log(this)
         if not outlet
             for handler in @handlers
                 handler(data)
@@ -46,88 +127,53 @@ class System
             for handler in @handlers[outlet]
                 handler(data)
 
-    emit: (data, outlet) ->
+class DiscreteSystem
 
-        if @buffer.length is 0
-            @send(data, outlet)
+    constructor: (@flow) ->
 
-        else
-            @flush()
-
-    flush: (outlet) ->
-        if @buffer.length != 0
-            data, outlet = buffer.pop()
-            @send(data, outlet)
-
-    serialize: ->
-        """
-        <system name="#{@name}" />
-        """
+    raise: (message) ->
 
 class Channel
 
     constructor: (@inlet, @outlet) ->
 
-    serialize: ->
-        "<channel inlet='#{@inlet}', outlet='#{@outlet}'/>"
-
 class Connection
 
-    constructor: (@name, @flow, source, sink, @channels) ->
-        self = this
-        @source = @flow.getSystem(source)
-        @sink = @flow.getSystem(sink)
-        @flow.log("#{@source.name} ---> #{@name} ---> #{@sink.name}")
-
-        if @channels
-            for channel in @channels
-                @source.prototype.whenReady(((data) ->
-                    self.sink.prototype.push(channel.inlet, data)),
-                    channel.outlet)
-        else
-            @source.prototype.whenReady (data) ->
-                # self.flow.log(data)
-                self.sink.prototype.push(data)
-
-       @flow.connections.push(this)
-
-    serialize: ->
-            xml = """
-            <connection name='#{@name}'>
-                #{@source.serialize()}
-                #{@sink.serialize()}
-            """
-
-            if @channels
-                xml += "<channels>"
-                for channel in @channels
-                    xml += channel.serialize()
-                xml += "</channels>"
-
-            xml += "</connection>"
+    constructor: (source, sink, @flow, @channels) ->
+        @source = @flow.systems.get(source)
+        @sink = @flow.systems.get(sink)
 
 class Message
 
     constructor: (@event, @payload) ->
 
-class Entity
 
-    constructor: (@name, @tags) ->
+class Entity extends Symbol
+
+    constructor: (@name, @tags, @value) ->
+
 
 class StateBus
 
     constructor: ->
-        @entities = {}
-        @discreteSystems = {}
+        @entities = new NameSpace()
+        @discreteSystems = new NameSpace()
 
-    createEntity: (name, tags) ->
+    addDiscreteSystem: (id, discreteSystemClass) ->
+        discrete_sytem = new discreteSystemClass(this)
+        id.value = discrete_sytem
+        @discreteSystems.intern(id)
+
+    createEntity: (name, tags, value) ->
         tags = tags || []
-        @entities[name] = new Entity(name, tags)
-        @entities[name]
+        value = value || undefined
+        entity = new Entity(name, tags, value)
+        @entities.intern(entity)
+        entity
 
     getEntity: (name, create) ->
-        if @entities[name]
-            return @entities[name]
+        if @entities.getSymbol(name)
+            return @entities.getSymbol(name)
         else if create
             return @createEntity(name)
         else
@@ -135,7 +181,7 @@ class StateBus
 
     getEntitiesByTags: (tags) ->
         entities = []
-        for entity in @entities
+        for entity in @entities.all()
             for tag in tags
                 if tag in entity.tags
                     entities.push entity
@@ -159,28 +205,41 @@ class StateBus
 
 class Flow
 
-    constructor: ->
-
-        # could be a ordered map
-        @connections = []
+    constructor: (@id) ->
         @bus = new StateBus
-        @systems = {}
+        @systems = new NameSpace("systems")
+        @connections = new NameSpace("systems.connections")
 
-    getSystem: (name) ->
-        @systems[name]
+    connect: (id, source, sink, channels) ->
+        connection = new Connection(source, sink, this, channels)
 
-    getConnection: (name) ->
-        for connection in @connections:
-            if connection.name == name
-                return connection
+        if connection.channels
+            for channel in connection.channels
+                connection.source.prototype.whenReady.call(connection.source, (((data) ->
+                    connection.sink.prototype.push.call(connection.sink, channel.inlet, data))),
+                    channel.outlet)
+        else
+            connection.source.prototype.whenReady.call(connection.source, ((data) ->
+                connection.sink.push(data)))
+
+        id.value = connection
+        @connections.intern(id)
+
+    addSystem: (id, systemClass) ->
+        system = new systemClass(this)
+        id.value = system
+        @systems.intern(id)
 
     serialize: ->
         xml = "<xml>"
-        xml += "<flow name='#{@name}'>"
+        xml += "<flow name='#{@id.name}'>"
 
-        for connection in @connections
+        for system in @systems.all()
+            xml += "<system>"
+            xml += "</system>"
+
+        for connection in @connections.all()
             xml += "<connection>"
-            xml += connection.serialize()
             xml += "</connection>"
 
         xml = "</flow>"
@@ -190,7 +249,11 @@ class Flow
         console.log(x)
 
 
-
+exports.Symbol = Symbol
+exports.S = Symbol
+exports.Token = Token
+exports.T = Token
+exports.NameSpace = NameSpace
 exports.System = System
 exports.Channel = Channel
 exports.Connection = Connection
