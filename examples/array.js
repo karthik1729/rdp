@@ -63,14 +63,14 @@ ConsoleDumper.prototype.push = function (data) {
     console.log(data);
 }
 
-var flow = new $.Flow(new $.S("ex"));
-flow.addSystem(new $.S("gen1"), ArrayGenerator);
-flow.addSystem(new $.S("range-avg1"), RangeAverageFilter)
-flow.connect(new $.S("array-avg-filter"), "gen1", "range-avg1")
-flow.addSystem(new $.S("condump"), ConsoleDumper)
-flow.connect(new $.S("dumper"),"range-avg1", "condump")
+var flow = new $.Flow( $.S("ex"));
+flow.addSystem( $.S("gen1"), ArrayGenerator);
+flow.addSystem( $.S("range-avg1"), RangeAverageFilter)
+flow.connect( $.S("array-avg-filter"), "gen1", "range-avg1")
+flow.addSystem( $.S("condump"), ConsoleDumper)
+flow.connect( $.S("dumper"),"range-avg1", "condump")
 
-flow.systems.get("gen1").push(new $.T("start"));
+flow.systems.get("gen1").push( $.T("start"));
 // flow.serialize();
 
 

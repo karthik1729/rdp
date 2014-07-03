@@ -44,10 +44,7 @@ class NameSpace
 
 class Symbol
 
-    constructor: (@name) ->
-        @attrs = {}
-        @value = undefined
-        @ns = undefined
+    constructor: (@name, @value, @ns) ->
 
     is: (symbol, deep) ->
        equality = {
@@ -66,8 +63,8 @@ class Symbol
 
        equality.attrs = 1
 
-       for k,v in @attrs
-           if v != symbol.attrs.k
+       for k,v in this
+           if v != symbol[k]
                equality.attrs = -1
 
        if deep
@@ -85,12 +82,39 @@ class Symbol
         else
            return @name
 
+S = (name) ->
+    return new Symbol(name)
+
+
 class Token extends Symbol
 
     constructor: (@name) ->
         @value = @name
         if typeof @name is "string"
             this[@name] = true
+
+T = (name) ->
+    return new Token(name)
+
+class Event extends Symbol
+
+    constructor: (@name, @context) ->
+
+class Message extends Symbol
+
+    constructor: (@type, @payload) ->
+        @name = "message." + @type
+
+class Entity extends Symbol
+
+    constructor: (@name, @tags, @value) ->
+
+class Component extends Symbol
+
+    constructor: (@name, attrs) ->
+        for k, v in attrs
+            this[k] = v
+
 
 class System
 
@@ -118,8 +142,6 @@ class System
 
 
     emit: (data, outlet) ->
-        #        console.log(data)
-        # console.log(this)
         if not outlet
             for handler in @handlers
                 handler(data)
@@ -129,7 +151,7 @@ class System
 
 class DiscreteSystem
 
-    constructor: (@flow) ->
+    constructor: (@flow, @events) ->
 
     raise: (message) ->
 
@@ -143,14 +165,6 @@ class Connection
         @source = @flow.systems.get(source)
         @sink = @flow.systems.get(sink)
 
-class Message
-
-    constructor: (@event, @payload) ->
-
-
-class Entity extends Symbol
-
-    constructor: (@name, @tags, @value) ->
 
 
 class StateBus
@@ -188,14 +202,6 @@ class StateBus
 
         return entities
 
-    addDiscreteSystem: (discrete_system, events) ->
-
-        for event in events
-
-            if @discreteSystems[event].systems is null
-                @discreteSystems[event].systems = [discrete_system]
-            else
-                @discreteSystems[event].systems.append(discrete_system)
 
     trigger: (event, message) ->
 
@@ -250,9 +256,9 @@ class Flow
 
 
 exports.Symbol = Symbol
-exports.S = Symbol
+exports.S = S
 exports.Token = Token
-exports.T = Token
+exports.T = T
 exports.NameSpace = NameSpace
 exports.System = System
 exports.Channel = Channel
