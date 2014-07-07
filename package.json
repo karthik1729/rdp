@@ -28,6 +28,9 @@
     "hardware"
   ],
   "scripts": { "test": "node test.js" },
+  "dependencies": {
+      "node-uuid": "*"
+  },
   "devDependencies": {
     "nodeunit": "^0.8.6",
     "gulp": "*",

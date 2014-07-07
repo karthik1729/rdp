@@ -1,3 +1,5 @@
+uuid = require "node-uuid"
+
 class NameSpace
 
     constructor: (@name, sep) ->
@@ -45,6 +47,7 @@ class NameSpace
 class Symbol
 
     constructor: (@name, @value, @ns) ->
+        @uuid = uuid.v4()
 
     is: (symbol, deep) ->
        equality = {
@@ -89,9 +92,13 @@ S = (name) ->
 class Token extends Symbol
 
     constructor: (@name) ->
+        @append(@name)
+
+    append: (@name) ->
         @value = @name
         if typeof @name is "string"
             this[@name] = true
+
 
 T = (name) ->
     return new Token(name)
@@ -112,7 +119,7 @@ class Component extends Symbol
 
 class System
 
-    constructor:(@flow) ->
+    constructor:(@flow, @options) ->
         @handlers = null
 
     push: (data, inlet) ->
@@ -124,7 +131,6 @@ class System
             if @handlers
                @handlers.push(handler)
             else
-               console.log(this)
                @handlers = [handler]
 
         else
@@ -163,8 +169,8 @@ class Connection
 class Bus
 
     constructor: ->
-        @entities = new NameSpace()
-        @discreteSystems = new NameSpace()
+        @entities = new NameSpace("bus.entities")
+        @discreteSystems = new NameSpace("bus.systems")
 
     addDiscreteSystem: (id, discreteSystemClass) ->
         discrete_sytem = new discreteSystemClass(this)
@@ -178,17 +184,17 @@ class Bus
         @entities.intern(entity)
         entity
 
-    getEntity: (name, create) ->
+    getEntity: (name, value) ->
         if @entities.getSymbol(name)
             return @entities.getSymbol(name)
-        else if create
-            return @createEntity(name)
+        else if value
+            return @createEntity(name, value)
         else
             return null
 
     getEntitiesByTags: (tags) ->
         entities = []
-        for entity in @entities.all()
+        for entity in @entities.allSymbols()
             for tag in tags
                 if tag in entity.tags
                     entities.push entity
@@ -208,45 +214,42 @@ class Flow
         @bus = new Bus
         @systems = new NameSpace("systems")
         @connections = new NameSpace("systems.connections")
+        @views = new NameSpace("systems.views")
 
     connect: (id, source, sink, channels) ->
         connection = new Connection(source, sink, this, channels)
 
         if connection.channels
             for channel in connection.channels
-                connection.source.prototype.whenReady.call(connection.source, (((data) ->
-                    connection.sink.prototype.push.call(connection.sink, channel.inlet, data))),
+                connection.source.whenReady((((data) ->
+                    connection.sink.push.call(connection.sink, channel.inlet, data))),
                     channel.outlet)
         else
-            connection.source.prototype.whenReady.call(connection.source, ((data) ->
+            connection.source.whenReady(((data) ->
                 connection.sink.push(data)))
+
+        if !id.name
+            id.name = "#{source}-#{sink}"
 
         id.value = connection
         @connections.intern(id)
 
-    addSystem: (id, systemClass) ->
-        system = new systemClass(this)
+    addSystem: (id, systemClass, options) ->
+        system = new systemClass(this, options)
         id.value = system
         @systems.intern(id)
 
-    serialize: ->
-        xml = "<xml>"
-        xml += "<flow name='#{@id.name}'>"
+    addView: (id, viewClass, options) ->
+        view = new viewClass(this, options)
+        id.value = view
+        @views.intern(id)
 
-        for system in @systems.all()
-            xml += "<system>"
-            xml += "</system>"
 
-        for connection in @connections.all()
-            xml += "<connection>"
-            xml += "</connection>"
+class GO
 
-        xml = "</flow>"
-        xml = "</xml>"
-
-    log: (x) ->
-        console.log(x)
-
+    constructor: (@flow, options) ->
+    show: (data) ->
+    interact: (data) ->
 
 exports.Symbol = Symbol
 exports.S = S
@@ -254,10 +257,12 @@ exports.Token = Token
 exports.T = T
 exports.NameSpace = NameSpace
 exports.System = System
+exports.DiscreteSystem = DiscreteSystem
 exports.Channel = Channel
 exports.Connection = Connection
 exports.Event = Event
 exports.Entity = Entity
 exports.Bus = Bus
 exports.Flow = Flow
+exports.GO = GO
 
