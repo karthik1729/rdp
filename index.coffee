@@ -40,24 +40,24 @@ class NameSpace
         symbol
 
     symbol: (name) ->
-        @symbols[name]
+        @elements[name]
 
     object: (name) ->
-        @symbols[name].object
+        @elements[name].object
 
-    symbols: (name) ->
+    symbols: () ->
        symbols = []
 
-       for k,v in @elements
+       for k,v of @elements
            symbols.push(v)
 
        symbols
 
-    objects: (name) ->
+    objects: () ->
        objects = []
 
-       for k,v in @elements
-           objects.push(v.value)
+       for k,v of @elements
+           objects.push(v.object)
 
        objects
 
@@ -69,7 +69,7 @@ class Data
             @props(props)
 
     props: (kv) ->
-        for k, v in kv
+        for k, v of kv
             @[k] = v
 
 D = (props) ->
@@ -88,11 +88,11 @@ class Error extends Data
 
 class Token extends Data
 
-    constructor: (@value, props)  ->
-        super(props)
-
-    stamp: (value) ->
+    constructor: (value, props)  ->
         @value = value
+        if typeof @value is "string"
+            @[@value] = true
+        super(props)
 
 T = (value, props) ->
     return new Token(value, props)
@@ -106,8 +106,8 @@ class Component extends Data
 class Entity extends Data
 
     constructor: (@tags, props) ->
-        @uuid = uuid.v4()
-        @components = new NameSpace(name + ".components")
+        @id = uuid.v4()
+        @components = new NameSpace("components")
         super(props)
 
     add: (symbol, component) ->
@@ -124,7 +124,7 @@ class Cell extends Entity
 
     constructor: (tags, props) ->
         super(tags, props)
-        @observers= new NameSpace(name + ".observers")
+        @observers= new NameSpace("observers")
 
     notify: (event) ->
        for ob in @observers.objects()
@@ -151,10 +151,10 @@ class System
 
     constructor: (@flow, @conf) ->
         @inlets = new NameSpace("inlets")
-        @inlets.bind([new Symbol("sysin")],[])
+        @inlets.bind(new Symbol("sysin"),[])
         @outlets = new NameSpace("outlets")
-        @outlets.bind([new Symbol("sysout")],[])
-        @outlets.bind([new Symbol("syserr")],[])
+        @outlets.bind(new Symbol("sysout"),[])
+        @outlets.bind(new Symbol("syserr"),[])
 
     inputValidator: (data, inlet) ->
         console.log(@symbol.name)
@@ -188,13 +188,13 @@ class System
             @error(validated_data)
             return
 
-        for outlet in @outlets.objects()
+        for outlet in @outlets.symbols()
             if outlet.name == outlet_name
                 for connection in outlet.object
-                    connection.object.transmit (data)
+                    connection.object.transmit data
 
     error: (error) ->
-        for outlet in @outlets.objects()
+        for outlet in @outlets.symbols()
             if outlet.name == "syserr"
                 for connection in outlet.object
                     connection.object.transmit (data)
@@ -246,21 +246,21 @@ class Store
     remove: (name) ->
         @entities.unbind(name)
 
-    entityByID: (uuid) ->
+    id: (id) ->
         for entity in @entities.objects()
-            if entity.uuid is uuid
+            if entity.id is id
                 return entity
 
         return null
 
-    removeById: (name) ->
+    removeId: (id) ->
         for entity_symbol in @entities.symbols()
-            if entity_symbol.object is uuid
+            if entity_symbol.object is id
                 @entities.unbind(entity_symbol.name)
 
         return null
 
-    entitiesByTags: (tags) ->
+    tags: (tags) ->
         entities = []
         for entity in @entities.objects()
             for tag in tags
@@ -272,7 +272,7 @@ class Store
 class Bus
 
     constructor: ->
-        @discreteSystems = new NameSpace("systems.discrete")
+        @discreteSystems = new NameSpace("discreteSystems")
 
     add: (symbol, discreteSystemClass, conf) ->
         discrete_sytem = new discreteSystemClass(this, conf)
@@ -295,13 +295,13 @@ class Flow
 
     connect: (source, sink, wire) ->
 
-        name = "#{source}::#{wire.outlet}-#{sink}::#{wire.inlet}"
-        symbol = new Symbol(name)
         connection = new Connection(source, sink, this, wire)
+        name = "#{source}::#{connection.wire.outlet}-#{sink}::#{connection.wire.inlet}"
+        symbol = new Symbol(name)
         @connections.bind(symbol, connection)
 
         for outlet in connection.source.outlets.symbols()
-            if outlet.name is wire.outlet
+            if outlet.name is connection.wire.outlet
                 outlet.object.push(symbol)
 
     disconnect: (name) ->
