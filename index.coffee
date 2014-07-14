@@ -1,255 +1,334 @@
 uuid = require "node-uuid"
 
-class NameSpace
-
-    constructor: (@name, sep) ->
-        @names = []
-        @symbols = {}
-        @sep = sep || "."
-
-    intern: (symbol) ->
-        if not @symbols[symbol.name]
-            @names.push(symbol.name)
-            @symbols[symbol.name] = symbol
-        else
-            @symbols[symbol.name] = symbol
-
-        symbol.ns = this
-
-    unintern: (symbol) ->
-        delete @symbols[symbol.name]
-        @names = (item for item in @names when item != symbol.name)
-        symbol.ns = undefined
-
-    getSymbol: (name) ->
-        @symbols[name]
-
-    get: (name) ->
-        @symbols[name].value
-
-    allSymbols: () ->
-        symbols = []
-
-        for name in @names
-            symbols.push(@symbols[name])
-
-        return symbols
-
-    all: () ->
-        values = []
-
-        for name in @names
-            values.push(@symbols[name].value)
-
-        return values
-
-
 class Symbol
 
-    constructor: (@name, @value, @ns) ->
-        @uuid = uuid.v4()
+    constructor: (@name, @object, @ns, attrs) ->
+        if attrs?
+            @attrs(attrs)
 
-    is: (symbol, deep) ->
-       equality = {
-           names: -1
-           namespaces: -1
-           attrs: -1
-       }
-
-       if @name == symbol.name
-           equality.names = 1
-
-       if !@ns
-           equality.namespaces = 1
-       else if @ns and @ns.id is symbol.id
-           equality.namespaces = 1
-
-       equality.attrs = 1
-
-       for k,v in this
-           if v != symbol[k]
-               equality.attrs = -1
-
-       if deep
-           if equality.names == 1 and equality.namespaces ==1 and equality.attrs == 1
-               return true
-       else
-           if equality.names == 1 and equality.namespaces ==1
-               return true
-
-       return false
+    attrs: (kv) ->
+        for k, v in kv
+            @[k] = v
 
     toString: ->
-       if @ns
-           return @ns.id + @ns.sep + @name
+       if @ns?
+           return @ns.name + @ns.sep + @name
         else
            return @name
 
-S = (name) ->
-    return new Symbol(name)
+S = (name, object, ns, props) ->
+    return new Symbol(name, object, ns, props)
+
+class NameSpace
+
+    constructor: (@name, sep) ->
+        @elements = {}
+        @sep = sep || "."
+
+    bind: (symbol, object) ->
+        name = symbol.name
+        symbol.object = object
+        object.symbol = symbol
+        @elements[name] = symbol
+        symbol.ns = this
+        symbol
+
+    unbind: (name) ->
+        symbol = @elements[name]
+        delete @elements[name]
+        symbol.ns = undefined
+        symbol
+
+    symbol: (name) ->
+        @symbols[name]
+
+    object: (name) ->
+        @symbols[name].object
+
+    symbols: (name) ->
+       symbols = []
+
+       for k,v in @elements
+           symbols.push(v)
+
+       symbols
+
+    objects: (name) ->
+       objects = []
+
+       for k,v in @elements
+           objects.push(v.value)
+
+       objects
 
 
-class Token extends Symbol
+class Data
 
-    constructor: (@name) ->
-        @append(@name)
+    constructor: (props) ->
+        if props?
+            @props(props)
 
-    append: (@name) ->
-        @value = @name
-        if typeof @name is "string"
-            this[@name] = true
+    props: (kv) ->
+        for k, v in kv
+            @[k] = v
+
+D = (props) ->
+    return new Data()
 
 
-T = (name) ->
-    return new Token(name)
+class Event extends Data
 
-class Event extends Symbol
+    constructor: (@name, @payload, props) ->
+        super(props)
 
-    constructor: (@name, @payload) ->
+class Error extends Data
 
-class Entity extends Symbol
+    constructor: (@name, @context, props) ->
+        super(props)
 
-    constructor: (@name, @tags, @value) ->
+class Token extends Data
 
-class Component extends Symbol
+    constructor: (@value, props)  ->
+        super(props)
 
-    constructor: (@name, attrs) ->
-        for k, v in attrs
-            this[k] = v
+    stamp: (value) ->
+        @value = value
+
+T = (value, props) ->
+    return new Token(value, props)
+
+class Component extends Data
+
+    constructor: (@name, props) ->
+        super(name)
+
+
+class Entity extends Data
+
+    constructor: (@tags, props) ->
+        @uuid = uuid.v4()
+        @components = new NameSpace(name + ".components")
+        super(props)
+
+    add: (symbol, component) ->
+        @components.bind(symbol, component)
+
+    remove: (name) ->
+        @components.unbind(name)
+
+    part: (name) ->
+        @components.symbol(name)
+
+
+class Cell extends Entity
+
+    constructor: (tags, props) ->
+        super(tags, props)
+        @observers= new NameSpace(name + ".observers")
+
+    notify: (event) ->
+       for ob in @observers.objects()
+            ob.raise(event)
+
+    add: (component) ->
+        super component
+        event = new Event("component-added", {component: component})
+        @notify(event)
+
+    remove: (name) ->
+        super name
+        event = new Event("component-removed", {component: component})
+        @notify(event)
+
+    observe: (symbol, discreteSystem) ->
+        @observers.bind(symbol, discreteSystem)
+
+    forget: (name) ->
+        @observers.unbind(name)
+
 
 class System
 
-    constructor:(@flow, @options) ->
-        @handlers = null
+    constructor: (@flow, @conf) ->
+        @inlets = new NameSpace("inlets")
+        @inlets.bind([new Symbol("sysin")],[])
+        @outlets = new NameSpace("outlets")
+        @outlets.bind([new Symbol("sysout")],[])
+        @outlets.bind([new Symbol("syserr")],[])
 
-    push: (data, inlet) ->
+    inputValidator: (data, inlet) ->
+        console.log(@symbol.name)
+        console.log(data)
+        data
 
-    # just data for single inlet
-    whenReady: (handler, outlet) ->
+    outputValidator: (data, outlet) ->
+        console.log(@symbol.name)
+        console.log(data)
+        data
 
-        if not outlet
-            if @handlers
-               @handlers.push(handler)
-            else
-               @handlers = [handler]
+    push: (data, inlet_name) ->
 
+        inlet_name = inlet_name || "sysin"
+
+        validated_data = @inputValidator(data, "inlet")
+
+        if validated_data instanceof Error
+            @error(validated_data)
         else
-            if @handlers
-                @handlers.outlet.push(handler)
-            else
-                @handlers.outlet = [handler]
+            @process data, inlet_name
 
+    process: (data, inlet_name) ->
 
+    emit: (data, outlet_name) ->
+        outlet_name = outlet || "sysout"
 
-    emit: (data, outlet) ->
-        if not outlet
-            for handler in @handlers
-                handler(data)
-        else
-            for handler in @handlers[outlet]
-                handler(data)
+        validated_data = @outputValidator(data, outlet)
+
+        if validated_data instanceof Error
+            @error(validated_data)
+            return
+
+        for outlet in @outlets.objects()
+            if outlet.name == outlet_name
+                for connection in outlet.object
+                    connection.object.transmit (data)
+
+    error: (error) ->
+        for outlet in @outlets.objects()
+            if outlet.name == "syserr"
+                for connection in outlet.object
+                    connection.object.transmit (data)
+
 
 class DiscreteSystem
 
-    constructor: (@flow, @events) ->
+    constructor: (@flow, @conf) ->
 
     raise: (event) ->
 
-class Channel
 
-    constructor: (@inlet, @outlet) ->
+class GO extends DiscreteSystem
+
+    constructor: (@flow, @conf) ->
+    show: (data) ->
+
+
+class Wire
+
+    constructor: (@outlet, @inlet) ->
+
 
 class Connection
 
-    constructor: (source, sink, @flow, @channels) ->
-        @source = @flow.systems.get(source)
-        @sink = @flow.systems.get(sink)
+    constructor: (source,  sink, @flow, wire) ->
+        @source = @flow.systems.object(source)
+        @sink = @flow.systems.object(sink)
+        @wire = wire || new Wire("sysout", "sysin")
+
+    transmit: (data) ->
+        @sink.push(data, @wire.inlet)
 
 
-class Bus
+class Store
 
     constructor: ->
-        @entities = new NameSpace("bus.entities")
-        @discreteSystems = new NameSpace("bus.systems")
+        @entities = new NameSpace("entities")
 
-    addDiscreteSystem: (id, discreteSystemClass) ->
-        discrete_sytem = new discreteSystemClass(this)
-        id.value = discrete_sytem
-        @discreteSystems.intern(id)
-
-    createEntity: (name, tags, value) ->
+    add: (symbol, tags, props) ->
         tags = tags || []
-        value = value || undefined
-        entity = new Entity(name, tags, value)
-        @entities.intern(entity)
-        entity
+        entity = new Entity(tags, props)
+        @entities.bind(symbol, entity)
+        symbol
 
-    getEntity: (name, value) ->
-        if @entities.getSymbol(name)
-            return @entities.getSymbol(name)
-        else if value
-            return @createEntity(name, value)
-        else
-            return null
+    entity: (name) ->
+        @entities.object(name)
 
-    getEntitiesByTags: (tags) ->
+    remove: (name) ->
+        @entities.unbind(name)
+
+    entityByID: (uuid) ->
+        for entity in @entities.objects()
+            if entity.uuid is uuid
+                return entity
+
+        return null
+
+    removeById: (name) ->
+        for entity_symbol in @entities.symbols()
+            if entity_symbol.object is uuid
+                @entities.unbind(entity_symbol.name)
+
+        return null
+
+    entitiesByTags: (tags) ->
         entities = []
-        for entity in @entities.allSymbols()
+        for entity in @entities.objects()
             for tag in tags
                 if tag in entity.tags
                     entities.push entity
 
         return entities
 
+class Bus
+
+    constructor: ->
+        @discreteSystems = new NameSpace("systems.discrete")
+
+    add: (symbol, discreteSystemClass, conf) ->
+        discrete_sytem = new discreteSystemClass(this, conf)
+        @discreteSystems.bind(symbol, discrete_sytem)
+
+    remove: (name) ->
+        @discreteSystems.unbind(name)
 
     trigger: (event) ->
-
-        for symbol in @discreteSystems.allSymbols()
-            if event.name in symbol.events
-                symbol.value.raise(event)
+        for obj in @discreteSystems.objects()
+                obj.raise(event)
 
 class Flow
 
-    constructor: (@id) ->
-        @bus = new Bus
+    constructor: () ->
+        @bus = new Bus()
+        @store = new Store()
         @systems = new NameSpace("systems")
         @connections = new NameSpace("systems.connections")
-        @views = new NameSpace("systems.views")
 
-    connect: (id, source, sink, channels) ->
-        connection = new Connection(source, sink, this, channels)
+    connect: (source, sink, wire) ->
 
-        if connection.channels
-            for channel in connection.channels
-                connection.source.whenReady((((data) ->
-                    connection.sink.push.call(connection.sink, channel.inlet, data))),
-                    channel.outlet)
-        else
-            connection.source.whenReady(((data) ->
-                connection.sink.push(data)))
+        name = "#{source}::#{wire.outlet}-#{sink}::#{wire.inlet}"
+        symbol = new Symbol(name)
+        connection = new Connection(source, sink, this, wire)
+        @connections.bind(symbol, connection)
 
-        if !id.name
-            id.name = "#{source}-#{sink}"
+        for outlet in connection.source.outlets.symbols()
+            if outlet.name is wire.outlet
+                outlet.object.push(symbol)
 
-        id.value = connection
-        @connections.intern(id)
+    disconnect: (name) ->
+        connection = @connection(name)
+        @connections.unbind(name)
 
-    addSystem: (id, systemClass, options) ->
-        system = new systemClass(this, options)
-        id.value = system
-        @systems.intern(id)
-
-    addView: (id, viewClass, options) ->
-        view = new viewClass(this, options)
-        id.value = view
-        @views.intern(id)
+        for outlet in connection.source.outlets.symbols()
+            if outlet.name is wire.outlet
+                connections = []
+                for conn in outlet.object
+                    if conn.name != name
+                        connections.push(conn)
+                outlet.object = connections
 
 
-class GO
+    connection: (name) ->
+        @connections.object(name)
 
-    constructor: (@flow, options) ->
-    show: (data) ->
-    interact: (data) ->
+    add: (symbol, systemClass, conf) ->
+        system = new systemClass(this, conf)
+        @systems.bind(symbol, system)
+
+    system: (name) ->
+        @systems.object(name)
+
+    remove: (name) ->
+        @systems.unbind(symbol, system)
 
 exports.Symbol = Symbol
 exports.S = S
@@ -258,10 +337,11 @@ exports.T = T
 exports.NameSpace = NameSpace
 exports.System = System
 exports.DiscreteSystem = DiscreteSystem
-exports.Channel = Channel
+exports.Wire = Wire
 exports.Connection = Connection
 exports.Event = Event
 exports.Entity = Entity
+exports.Error = Error
 exports.Bus = Bus
 exports.Flow = Flow
 exports.GO = GO
