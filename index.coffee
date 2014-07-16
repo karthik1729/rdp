@@ -1,4 +1,5 @@
 uuid = require "node-uuid"
+clone = require "clone"
 
 class Symbol
 
@@ -75,13 +76,12 @@ class Data
 D = (props) ->
     return new Data()
 
-
 class Event extends Data
 
     constructor: (@name, @payload, props) ->
         super(props)
 
-class Error extends Data
+class Glitch extends Data
 
     constructor: (@name, @context, props) ->
         super(props)
@@ -132,19 +132,25 @@ class Cell extends Entity
 
     add: (component) ->
         super component
-        event = new Event("component-added", {component: component})
+        event = new Event("component-added", {component: component, cell: this})
         @notify(event)
 
     remove: (name) ->
         super name
-        event = new Event("component-removed", {component: component})
+        event = new Event("component-removed", {component: component, cell: this})
         @notify(event)
 
-    observe: (symbol, discreteSystem) ->
-        @observers.bind(symbol, discreteSystem)
+    observe: (symbol, system) ->
+        @observers.bind(symbol, system)
 
     forget: (name) ->
         @observers.unbind(name)
+
+    step: (fn, args...) ->
+        return fn.apply(this, args)
+
+    clone: () ->
+        return clone(this)
 
 
 class System
@@ -152,6 +158,7 @@ class System
     constructor: (@flow, @conf) ->
         @inlets = new NameSpace("inlets")
         @inlets.bind(new Symbol("sysin"),[])
+        @inlets.bind(new Symbol("feedback"),[])
         @outlets = new NameSpace("outlets")
         @outlets.bind(new Symbol("sysout"),[])
         @outlets.bind(new Symbol("syserr"),[])
@@ -172,44 +179,37 @@ class System
 
         validated_data = @inputValidator(data, "inlet")
 
-        if validated_data instanceof Error
+        if validated_data instanceof Glitch
             @error(validated_data)
         else
             @process data, inlet_name
 
     process: (data, inlet_name) ->
+        @emit(data, "stdout")
 
-    emit: (data, outlet_name) ->
-        outlet_name = outlet || "sysout"
-
-        validated_data = @outputValidator(data, outlet)
-
-        if validated_data instanceof Error
-            @error(validated_data)
-            return
-
+    send: (data, outlet_name) ->
         for outlet in @outlets.symbols()
             if outlet.name == outlet_name
                 for connection in outlet.object
                     connection.object.transmit data
 
-    error: (error) ->
-        for outlet in @outlets.symbols()
-            if outlet.name == "syserr"
-                for connection in outlet.object
-                    connection.object.transmit (data)
+    emit: (data, outlet_name) ->
+        outlet_name = outlet_name || "sysout"
+
+        validated_data = @outputValidator(data, outlet_name)
+
+        if validated_data instanceof Glitch
+            @error(validated_data)
+            return
+
+        @send(data, outlet_name)
 
 
-class DiscreteSystem
-
-    constructor: (@flow, @conf) ->
+    error: (data) ->
+        @send(data, "syserr")
 
     raise: (event) ->
 
-
-class GO extends DiscreteSystem
-
-    constructor: (@flow, @conf) ->
     show: (data) ->
 
 
@@ -272,17 +272,17 @@ class Store
 class Bus
 
     constructor: ->
-        @discreteSystems = new NameSpace("discreteSystems")
+        @systems = new NameSpace("bus")
 
-    add: (symbol, discreteSystemClass, conf) ->
-        discrete_sytem = new discreteSystemClass(this, conf)
-        @discreteSystems.bind(symbol, discrete_sytem)
+    add: (symbol, SystemClass, conf) ->
+        sytem = new SystemClass(this, conf)
+        @systems.bind(symbol, sytem)
 
     remove: (name) ->
-        @discreteSystems.unbind(name)
+        @systems.unbind(name)
 
     trigger: (event) ->
-        for obj in @discreteSystems.objects()
+        for obj in @systems.objects()
                 obj.raise(event)
 
 class Flow
@@ -331,18 +331,21 @@ class Flow
         @systems.unbind(symbol, system)
 
 exports.Symbol = Symbol
+exports.NameSpace = NameSpace
 exports.S = S
+exports.Data = Data
+exports.D = D
+exports.Event = Event
+exports.Glitch = Glitch
 exports.Token = Token
 exports.T = T
-exports.NameSpace = NameSpace
+exports.Component = Component
+exports.Entity = Entity
+exports.Cell = Cell
 exports.System = System
-exports.DiscreteSystem = DiscreteSystem
 exports.Wire = Wire
 exports.Connection = Connection
-exports.Event = Event
-exports.Entity = Entity
-exports.Error = Error
+exports.Store = Store
 exports.Bus = Bus
 exports.Flow = Flow
-exports.GO = GO
 
