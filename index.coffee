@@ -20,6 +20,8 @@ class Symbol
 S = (name, object, ns, props) ->
     return new Symbol(name, object, ns, props)
 
+# should be a set
+
 class NameSpace
 
     constructor: (@name, sep) ->
@@ -42,6 +44,12 @@ class NameSpace
 
     symbol: (name) ->
         @elements[name]
+
+    has: (name) ->
+        if @elements[name]?
+            return true
+        else
+            return false
 
     object: (name) ->
         @elements[name].object
@@ -72,13 +80,23 @@ class Data
     props: (kv) ->
         for k, v of kv
             @[k] = v
+        @validator
+
+    validator: ->
+        this
 
 D = (props) ->
     return new Data()
 
+class Signal extends Data
+
+    constructor: (@name, @message, props) ->
+        super(props)
+
 class Event extends Data
 
     constructor: (@name, @payload, props) ->
+        @ts = new Date().getTime();
         super(props)
 
 class Glitch extends Data
@@ -155,13 +173,20 @@ class Cell extends Entity
 
 class System
 
-    constructor: (@flow, @conf) ->
+    constructor: (@flow) ->
         @inlets = new NameSpace("inlets")
         @inlets.bind(new Symbol("sysin"),[])
         @inlets.bind(new Symbol("feedback"),[])
         @outlets = new NameSpace("outlets")
         @outlets.bind(new Symbol("sysout"),[])
         @outlets.bind(new Symbol("syserr"),[])
+
+        @state = []
+        @registers = {}
+
+    start: (@conf) ->
+
+    stop: () ->
 
     inputValidator: (data, inlet) ->
         console.log(@symbol.name)
@@ -183,6 +208,10 @@ class System
             @error(validated_data)
         else
             @process data, inlet_name
+
+    goto: (inlet_name, data) ->
+        @push(data, inlet_name)
+
 
     process: (data, inlet_name) ->
         @emit(data, "stdout")
@@ -293,16 +322,20 @@ class Flow
         @systems = new NameSpace("systems")
         @connections = new NameSpace("systems.connections")
 
-    connect: (source, sink, wire) ->
+    connect: (source, sink, wire, symbol) ->
 
         connection = new Connection(source, sink, this, wire)
-        name = "#{source}::#{connection.wire.outlet}-#{sink}::#{connection.wire.inlet}"
-        symbol = new Symbol(name)
+        if !symbol
+            name = "#{source}::#{connection.wire.outlet}-#{sink}::#{connection.wire.inlet}"
+            symbol = new Symbol(name)
         @connections.bind(symbol, connection)
 
         for outlet in connection.source.outlets.symbols()
             if outlet.name is connection.wire.outlet
                 outlet.object.push(symbol)
+
+    pipe: (source, wire, sink) ->
+        @connect(source, sink, wire)
 
     disconnect: (name) ->
         connection = @connection(name)
@@ -321,14 +354,17 @@ class Flow
         @connections.object(name)
 
     add: (symbol, systemClass, conf) ->
-        system = new systemClass(this, conf)
+        system = new systemClass(this)
+        system.start(conf)
         @systems.bind(symbol, system)
 
     system: (name) ->
         @systems.object(name)
 
     remove: (name) ->
-        @systems.unbind(symbol, system)
+        system = @systems.object(name)
+        system.stop()
+        @systems.unbind(name)
 
 exports.Symbol = Symbol
 exports.NameSpace = NameSpace

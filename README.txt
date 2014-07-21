@@ -1,3 +1,16 @@
+RDP -- Reactive Data (Flow) Processing
+======================================
+
+Read [this](http://lexical.foobar.systems/rdp.html).
+
+Install
+=======
+
+`npm install rdp`
+
+API
+===
+
 var O_O = require("../index.js"),
     yx = require("yx"),
     _  = require("lodash");
@@ -70,4 +83,12 @@ flow.connect( "range-avg1", "condump", O_O.S("dumper"))
 
 flow.systems.object("gen1").push( O_O.T("start"));
 
+
+
+Status
+======
+
+Alpha
+
+( This readme was generated with edde )
 
