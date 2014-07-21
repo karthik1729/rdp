@@ -298,7 +298,7 @@ class Store
 
         return entities
 
-class Bus extends Namespace
+class Bus extends NameSpace
 
     constructor: (@name, sep) ->
         super(@name, sep)
