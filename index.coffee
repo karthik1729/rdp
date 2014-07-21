@@ -298,28 +298,20 @@ class Store
 
         return entities
 
-class Bus
+class Bus extends Namespace
 
-    constructor: ->
-        @systems = new NameSpace("bus")
-
-    add: (symbol, SystemClass, conf) ->
-        sytem = new SystemClass(this, conf)
-        @systems.bind(symbol, sytem)
-
-    remove: (name) ->
-        @systems.unbind(name)
+    constructor: (@name, sep) ->
+        super(@name, sep)
 
     trigger: (event) ->
-        for obj in @systems.objects()
-                obj.raise(event)
+        for obj in @objects()
+              obj.raise(event)
 
 class Flow
 
     constructor: () ->
-        @bus = new Bus()
         @store = new Store()
-        @systems = new NameSpace("systems")
+        @systems = new Bus("systems")
         @connections = new NameSpace("systems.connections")
 
     connect: (source, sink, wire, symbol) ->
@@ -353,9 +345,8 @@ class Flow
     connection: (name) ->
         @connections.object(name)
 
-    add: (symbol, systemClass, conf) ->
+    add: (symbol, systemClass) ->
         system = new systemClass(this)
-        system.start(conf)
         @systems.bind(symbol, system)
 
     system: (name) ->
