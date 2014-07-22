@@ -1,5 +1,6 @@
 uuid = require "node-uuid"
 clone = require "clone"
+mixins = require "./lib/mixins.js"
 
 class Symbol
 
@@ -11,14 +12,23 @@ class Symbol
         for k, v in kv
             @[k] = v
 
+    is: (symbol) ->
+        if symbol.name is @name
+            if symbol.object is @object
+                return true
+            if (symbol.object is null) and (@object is null)
+                return true
+        else
+            return false
+
     toString: ->
        if @ns?
            return @ns.name + @ns.sep + @name
         else
            return @name
 
-S = (name, object, ns, props) ->
-    return new Symbol(name, object, ns, props)
+S = (name, object, ns, attrs) ->
+    return new Symbol(name, object, ns, attrs)
 
 # should be a set
 
@@ -90,14 +100,14 @@ D = (props) ->
 
 class Signal extends Data
 
-    constructor: (@name, @message, props) ->
-        super(props)
-
-class Event extends Data
-
     constructor: (@name, @payload, props) ->
-        @ts = new Date().getTime();
         super(props)
+
+class Event extends Signal
+
+    constructor: (name, payload, props) ->
+        super(name, message, props)
+        @ts = new Date().getTime()
 
 class Glitch extends Data
 
@@ -106,11 +116,34 @@ class Glitch extends Data
 
 class Token extends Data
 
-    constructor: (value, props)  ->
-        @value = value
-        if typeof @value is "string"
-            @[@value] = true
+    constructor: (value, sign, props)  ->
         super(props)
+        @signs = []
+        @stamp(sign, value)
+
+    by: ->
+       if @signs.length > 0
+           @signs[@signs.length - 1]
+       else
+           S("Unknown")
+
+    stamp: (sign, value) ->
+        if value
+            if @[value]
+                delete @[value]
+            @value = value
+            if typeof @value is "string"
+                @[@value] = true
+        if sign?
+            @signs.push(value, sign)
+        else
+            @signs.push(S("Unknown"))
+
+
+class StopToken extends Token
+
+    constructor: (sign, props) ->
+        super("stop", sign, props)
 
 T = (value, props) ->
     return new Token(value, props)
@@ -134,8 +167,12 @@ class Entity extends Data
     remove: (name) ->
         @components.unbind(name)
 
+    has: (name) ->
+        @components.has(name)
+
     part: (name) ->
         @components.symbol(name)
+
 
 
 class Cell extends Entity
@@ -173,7 +210,7 @@ class Cell extends Entity
 
 class System
 
-    constructor: (@flow) ->
+    constructor: (@flow, @conf) ->
         @inlets = new NameSpace("inlets")
         @inlets.bind(new Symbol("sysin"),[])
         @inlets.bind(new Symbol("feedback"),[])
@@ -184,25 +221,29 @@ class System
         @state = []
         @registers = {}
 
-    start: (@conf) ->
-
-    stop: () ->
+    top: ->
+        if @state.length > 0
+            @state[@state.length - 1]
+        else
+            S("Unknown")
 
     inputValidator: (data, inlet) ->
-        console.log(@symbol.name)
-        console.log(data)
         data
 
     outputValidator: (data, outlet) ->
-        console.log(@symbol.name)
-        console.log(data)
         data
+
+    STOP: (stop_token)->
 
     push: (data, inlet_name) ->
 
+        if data instanceof StopToken
+            @STOP(data)
+            return
+
         inlet_name = inlet_name || "sysin"
 
-        validated_data = @inputValidator(data, "inlet")
+        validated_data = @inputValidator(data, inlet_name)
 
         if validated_data instanceof Glitch
             @error(validated_data)
@@ -211,7 +252,6 @@ class System
 
     goto: (inlet_name, data) ->
         @push(data, inlet_name)
-
 
     process: (data, inlet_name) ->
         @emit(data, "stdout")
@@ -237,7 +277,10 @@ class System
     error: (data) ->
         @send(data, "syserr")
 
-    raise: (event) ->
+    raise: (signal) ->
+        @react(signal)
+
+    react: (signal) ->
 
     show: (data) ->
 
@@ -268,6 +311,9 @@ class Store
         entity = new Entity(tags, props)
         @entities.bind(symbol, entity)
         symbol
+
+    has: (name) ->
+        @entities.has(name)
 
     entity: (name) ->
         @entities.object(name)
@@ -303,16 +349,19 @@ class Bus extends NameSpace
     constructor: (@name, sep) ->
         super(@name, sep)
 
-    trigger: (event) ->
+    trigger: (signal) ->
         for obj in @objects()
-              obj.raise(event)
+              console.log("sss")
+              obj.raise(signal)
 
 class Flow
 
     constructor: () ->
         @store = new Store()
-        @systems = new Bus("systems")
-        @connections = new NameSpace("systems.connections")
+        @bus = new Bus("systems")
+        @systems = @bus
+        @connections = new NameSpace("bus.connections")
+        @STOP = new StopToken()
 
     connect: (source, sink, wire, symbol) ->
 
@@ -345,23 +394,30 @@ class Flow
     connection: (name) ->
         @connections.object(name)
 
-    add: (symbol, systemClass) ->
-        system = new systemClass(this)
-        @systems.bind(symbol, system)
+    hasConnection: (name) ->
+        @connections.has(name)
+
+    add: (symbol, systemClass, conf) ->
+        system = new systemClass(this, conf)
+        @bus.bind(symbol, system)
+
+    has: (name) ->
+        @bus.has(name)
 
     system: (name) ->
-        @systems.object(name)
+        @bus.object(name)
 
     remove: (name) ->
-        system = @systems.object(name)
-        system.stop()
-        @systems.unbind(name)
+        system = @bus.object(name)
+        system.push(@STOP)
+        @bus.unbind(name)
 
 exports.Symbol = Symbol
 exports.NameSpace = NameSpace
 exports.S = S
 exports.Data = Data
 exports.D = D
+exports.Signal = Signal
 exports.Event = Event
 exports.Glitch = Glitch
 exports.Token = Token
@@ -375,4 +431,5 @@ exports.Connection = Connection
 exports.Store = Store
 exports.Bus = Bus
 exports.Flow = Flow
+exports.mixins = mixins
 
