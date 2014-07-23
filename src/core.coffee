@@ -121,10 +121,19 @@ class Token extends Data
         @signs = []
         @stamp(sign, value)
 
-    by: ->
-       if @signs.length > 0
+    value: ->
+        @value
+
+    by: (index) ->
+        if index?
+           if @signs[index]?
+               return @signs[index]
+            else
+               return S("Unknown")
+
+        if @signs.length > 0
            @signs[@signs.length - 1]
-       else
+        else
            S("Unknown")
 
     stamp: (sign, value) ->
@@ -135,18 +144,19 @@ class Token extends Data
             if typeof @value is "string"
                 @[@value] = true
         if sign?
-            @signs.push(value, sign)
+            @signs.push(sign)
         else
             @signs.push(S("Unknown"))
 
 
-class StopToken extends Token
+start = (sign, props) ->
+    return new Token("start", sign, props)
 
-    constructor: (sign, props) ->
-        super("stop", sign, props)
+stop = (sign, props) ->
+    return new Token("stop", sign, props)
 
-T = (value, props) ->
-    return new Token(value, props)
+T = (value, sign, props) ->
+    return new Token(value, sign, props)
 
 class Component extends Data
 
@@ -172,7 +182,6 @@ class Entity extends Data
 
     part: (name) ->
         @components.symbol(name)
-
 
 
 class Cell extends Entity
@@ -219,38 +228,40 @@ class System
         @outlets.bind(new Symbol("syserr"),[])
 
         @state = []
-        @registers = {}
+        @r = {}
 
-    top: ->
+    top: (index) ->
+        if index?
+            if @state[index]?
+                return @state[index]
+            else
+                return S("Unknown")
+
         if @state.length > 0
-            @state[@state.length - 1]
+            return @state[@state.length - 1]
         else
-            S("Unknown")
+            return S("Unknown")
 
-    inputValidator: (data, inlet) ->
+    input: (data, inlet) ->
         data
 
-    outputValidator: (data, outlet) ->
+    output: (data, outlet) ->
         data
 
-    STOP: (stop_token)->
+    STOP: (stop_token) ->
 
     push: (data, inlet_name) ->
 
-        if data instanceof StopToken
-            @STOP(data)
-            return
-
         inlet_name = inlet_name || "sysin"
 
-        validated_data = @inputValidator(data, inlet_name)
+        input_data = @input(data, inlet_name)
 
-        if validated_data instanceof Glitch
-            @error(validated_data)
+        if input_data instanceof Glitch
+            @error(input_data)
         else
-            @process data, inlet_name
+            @process input_data, inlet_name
 
-    goto: (inlet_name, data) ->
+    goto_with: (inlet_name, data) ->
         @push(data, inlet_name)
 
     process: (data, inlet_name) ->
@@ -265,13 +276,13 @@ class System
     emit: (data, outlet_name) ->
         outlet_name = outlet_name || "sysout"
 
-        validated_data = @outputValidator(data, outlet_name)
+        output_data = @output(data, outlet_name)
 
-        if validated_data instanceof Glitch
-            @error(validated_data)
+        if output_data instanceof Glitch
+            @error(output_data)
             return
 
-        @send(data, outlet_name)
+        @send(output_data, outlet_name)
 
 
     error: (data) ->
@@ -293,12 +304,12 @@ class Wire
 class Connection
 
     constructor: (source,  sink, @flow, wire) ->
-        @source = @flow.systems.object(source)
-        @sink = @flow.systems.object(sink)
-        @wire = wire || new Wire("sysout", "sysin")
+        @source = @flow.systems.symbol(source)
+        @sink = @flow.systems.symbol(sink)
+        @wire = wire || new Wire(@source.object.outlets.symbol("sysout"), @sink.object.inlets.symbol("sysin"))
 
     transmit: (data) ->
-        @sink.push(data, @wire.inlet)
+        @sink.object.push(data, @wire.inlet.name)
 
 
 class Store
@@ -351,28 +362,29 @@ class Bus extends NameSpace
 
     trigger: (signal) ->
         for obj in @objects()
-              console.log("sss")
               obj.raise(signal)
 
 class Flow
 
-    constructor: () ->
-        @store = new Store()
-        @bus = new Bus("systems")
+    constructor: (connectionClass, storeClass, busClass) ->
+        storeClass = storeClass || Store
+        busClass = busClass || Bus
+        @connectionClass = connectionClass || Connection
+        @store = new storeClass()
+        @bus = new busClass("systems")
         @systems = @bus
         @connections = new NameSpace("bus.connections")
-        @STOP = new StopToken()
 
     connect: (source, sink, wire, symbol) ->
 
-        connection = new Connection(source, sink, this, wire)
+        connection = new @connectionClass(source, sink, this, wire)
         if !symbol
-            name = "#{source}::#{connection.wire.outlet}-#{sink}::#{connection.wire.inlet}"
+            name = "#{source}::#{connection.wire.outlet.name}-#{sink}::#{connection.wire.inlet.name}"
             symbol = new Symbol(name)
         @connections.bind(symbol, connection)
 
-        for outlet in connection.source.outlets.symbols()
-            if outlet.name is connection.wire.outlet
+        for outlet in connection.source.object.outlets.symbols()
+            if outlet.name is connection.wire.outlet.name
                 outlet.object.push(symbol)
 
     pipe: (source, wire, sink) ->
@@ -382,8 +394,8 @@ class Flow
         connection = @connection(name)
         @connections.unbind(name)
 
-        for outlet in connection.source.outlets.symbols()
-            if outlet.name is wire.outlet
+        for outlet in connection.source.object.outlets.symbols()
+            if outlet.name is connection.wire.outlet.name
                 connections = []
                 for conn in outlet.object
                     if conn.name != name
@@ -421,6 +433,8 @@ exports.Signal = Signal
 exports.Event = Event
 exports.Glitch = Glitch
 exports.Token = Token
+exports.start = start
+exports.stop = stop
 exports.T = T
 exports.Component = Component
 exports.Entity = Entity

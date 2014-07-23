@@ -4,11 +4,11 @@ var gutil = require('gulp-util'),
     coffee = require('gulp-coffee');
 
 gulp.task('coffee', function() {
-  gulp.src('./*.coffee')
+  gulp.src('./src/core.coffee')
     .pipe(sourcemaps.init())
     .pipe(coffee({bare: true}).on('error', gutil.log))
     .pipe(sourcemaps.write())
-    .pipe(gulp.dest('./'))
+    .pipe(gulp.dest('./lib'))
 });
 
 gulp.task('watch', function() {
