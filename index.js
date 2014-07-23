@@ -1,6 +1,6 @@
-var core = require("./lib/core");
-var mixins = require("./lib/mixins");
-var helpers = require("./lib/helpers");
+var core = require("./lib/core.js");
+var mixins = require("./lib/mixins.js");
+var helpers = require("./lib/helpers.js");
 
 exports.Symbol = core.Symbol;
 exports.NameSpace = core.NameSpace;

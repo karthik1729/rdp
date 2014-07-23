@@ -1,6 +1,6 @@
 uuid = require "node-uuid"
 clone = require "clone"
-mixins = require "./lib/mixins.js"
+mixins = require "./mixins.js"
 
 class Symbol
 

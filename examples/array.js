@@ -59,14 +59,14 @@ ConsoleDumper.prototype.push = function (data) {
     console.log(data);
 }
 
-var flow = new O_O.Flow( O_O.S("ex"));
+var flow = new O_O.Flow();
 
 flow.add( O_O.S("gen1"), ArrayGenerator);
 flow.add( O_O.S("range-avg1"), RangeAverageFilter)
 
-flow.connect( "gen1", "range-avg1", null, O_O.S("array-avg-filter"))
+flow.connect( "gen1", "range-avg1");
 flow.add( O_O.S("condump"), ConsoleDumper)
-flow.connect( "range-avg1", "condump", O_O.S("dumper"))
+flow.connect( "range-avg1", "condump");
 
 flow.systems.object("gen1").push( O_O.T("start"));
 
