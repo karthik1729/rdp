@@ -12,7 +12,7 @@ gulp.task('coffee', function() {
 });
 
 gulp.task('watch', function() {
-    gulp.watch("./*.coffee", ["coffee"])
+    gulp.watch("./src/*.coffee", ["coffee"])
 });
 
 

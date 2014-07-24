@@ -10,20 +10,24 @@ exports.D = core.D;
 exports.Signal = core.Signal;
 exports.Event = core.Event;
 exports.Glitch = core.Glitch;
+exports.G = core.G;
 exports.Token = core.Token;
 exports.start = core.start;
 exports.stop = core.stop;
 exports.T = core.T;
-exports.Component = core.Component;
+exports.Part = core.Part;
+exports.P = core.P;
 exports.Entity = core.Entity;
+exports.E = core.E;
 exports.Cell = core.Cell;
+exports.C = core.C;
 exports.System = core.System;
 exports.Wire = core.Wire;
 exports.Connection = core.Connection;
 exports.Store = core.Store;
 exports.Bus = core.Bus;
-exports.Flow = core.Flow;
+exports.Pipeline = core.Pipeline;
 
 exports.mixins = mixins;
-exports.mixins = helpers;
+exports.helpers = helpers;
 

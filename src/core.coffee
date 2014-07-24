@@ -1,12 +1,25 @@
 uuid = require "node-uuid"
 clone = require "clone"
+
 mixins = require "./mixins.js"
+
+xpath = require('xpath')
+dom = require('xmldom').DOMParser
 
 class Symbol
 
     constructor: (@name, @object, @ns, attrs) ->
         if attrs?
             @attrs(attrs)
+
+    attr: (k, v) ->
+        if v
+            @[k] = v
+        else
+            @[k]
+
+    op: (f, args...) ->
+        return f.apply(this, args)
 
     attrs: (kv) ->
         for k, v in kv
@@ -53,7 +66,10 @@ class NameSpace
         symbol
 
     symbol: (name) ->
-        @elements[name]
+        if @has(name)
+            @elements[name]
+        else
+            S("NotFound")
 
     has: (name) ->
         if @elements[name]?
@@ -62,7 +78,10 @@ class NameSpace
             return false
 
     object: (name) ->
-        @elements[name].object
+        if @has(name)
+            @elements[name].object
+        else
+            G("NotFound")
 
     symbols: () ->
        symbols = []
@@ -84,35 +103,109 @@ class NameSpace
 class Data
 
     constructor: (props) ->
+        @__slots = []
         if props?
             @props(props)
 
-    props: (kv) ->
-        for k, v of kv
-            @[k] = v
-        @validator
+    is: (data) ->
+        all_slots = @slots()
+        for name in data.slots()
+            if data.slot(name) is not @slot(name)
+                return false
 
-    validator: ->
-        this
+        return true
+
+    props: (kv) ->
+        if kv
+            for k, v of kv
+                @[k] = v
+                if k not in @slots()
+                    @slots(k)
+            return @validate()
+        else
+            properties = []
+            for name in @slots()
+                properties.push(@[name])
+            return properties
+
+    slots: (name) ->
+        if name
+            @__slots.push(name)
+        else
+            @__slots
+
+    slot: (name, value) ->
+        if value
+            @[name] = value
+            if name not in @slots()
+                @slots(name)
+            if @validate()
+                return value
+            else
+                G("Invalid")
+        else
+            if @has(name)
+                @[name]
+            else
+                G("NotFound")
+
+    has: (name) ->
+        if name in @slots()
+            return true
+        else
+            return false
+
+    validate: ->
+        true
+
+
+    serialize: ->
+        xml = ""
+        for name in @slots()
+            xml += "<property slot='#{name}'>"
+            scalar  = @slot(name)
+            if Array.isArray(scalar)
+                type = "array"
+                xml += "<scalar type='#{type}'>"
+                xml += "<list>"
+                for e in scalar
+                    type = typeof e
+                    xml += "<scalar type='#{type}'>#{e}</scalar>"
+                xml += "</list>"
+                xml += "</scalar>"
+            else
+                type = typeof scalar
+                xml += "<scalar type='#{type}'>#{scalar.toString()}</scalar>"
+            xml += '</property>'
+        xml
 
 D = (props) ->
-    return new Data()
+    return new Data(props)
 
 class Signal extends Data
 
-    constructor: (@name, @payload, props) ->
+    constructor: (name, payload, props) ->
+        props = props || {}
+        props.name = name
+        props.payload = payload
         super(props)
 
 class Event extends Signal
 
     constructor: (name, payload, props) ->
-        super(name, message, props)
-        @ts = new Date().getTime()
+        props = props || {}
+        pops.ts = new Date().getTime()
+        super(name, payload, props)
 
 class Glitch extends Data
 
-    constructor: (@name, @context, props) ->
+    constructor: (name, props) ->
+        props = props || {}
+        props.name = name
         super(props)
+
+G = (name, props) ->
+    return new Glitch(name, props)
 
 class Token extends Data
 
@@ -121,20 +214,23 @@ class Token extends Data
         @signs = []
         @stamp(sign, value)
 
+    is: (t) ->
+        false
+
     value: ->
         @value
 
-    by: (index) ->
+    stamp_by: (index) ->
         if index?
            if @signs[index]?
                return @signs[index]
             else
-               return S("Unknown")
+               return S("NotFound")
 
         if @signs.length > 0
-           @signs[@signs.length - 1]
+           return @signs[@signs.length - 1]
         else
-           S("Unknown")
+           return S("NotFound")
 
     stamp: (sign, value) ->
         if value
@@ -158,31 +254,52 @@ stop = (sign, props) ->
 T = (value, sign, props) ->
     return new Token(value, sign, props)
 
-class Component extends Data
+class Part extends Data
 
     constructor: (@name, props) ->
-        super(name)
+        super(props)
 
+    serialize: ->
+        xml += "<part name='#{@name}'>"
+        xml += super()
+        xml += '</part>'
+
+P = (name, props) ->
+    return new Part(name, props)
 
 class Entity extends Data
 
-    constructor: (@tags, props) ->
-        @id = uuid.v4()
-        @components = new NameSpace("components")
+    constructor: (tags, props) ->
+        @parts = new NameSpace("parts")
+        props = props || {}
+        props.id = props.id || uuid.v4()
+        tags = tags || props.tags || []
+        props.tags = tags
         super(props)
 
-    add: (symbol, component) ->
-        @components.bind(symbol, component)
+    add: (symbol, part) ->
+        @parts.bind(symbol, part)
 
     remove: (name) ->
-        @components.unbind(name)
+        @parts.unbind(name)
 
-    has: (name) ->
-        @components.has(name)
+    hasPart: (name) ->
+        @parts.has(name)
 
     part: (name) ->
-        @components.symbol(name)
+        @parts.symbol(name)
 
+    serialize: ->
+        xml = "<entity>"
+        xml += '<parts>'
+        for part of @parts.objects()
+            xml += part.serialize()
+        xml += '</parts>'
+        xml += super()
+        xml += '</entity>'
+
+E = (tags, props) ->
+    return new Entity(tags, props)
 
 class Cell extends Entity
 
@@ -194,14 +311,14 @@ class Cell extends Entity
        for ob in @observers.objects()
             ob.raise(event)
 
-    add: (component) ->
-        super component
-        event = new Event("component-added", {component: component, cell: this})
+    add: (part) ->
+        super part
+        event = new Event("part-added", {part: part, cell: this})
         @notify(event)
 
     remove: (name) ->
         super name
-        event = new Event("component-removed", {component: component, cell: this})
+        event = new Event("part-removed", {part: part, cell: this})
         @notify(event)
 
     observe: (symbol, system) ->
@@ -216,10 +333,12 @@ class Cell extends Entity
     clone: () ->
         return clone(this)
 
+C = (tags, props) ->
+    return new Cell(tags, props)
 
 class System
 
-    constructor: (@flow, @conf) ->
+    constructor: (@pl, @conf) ->
         @inlets = new NameSpace("inlets")
         @inlets.bind(new Symbol("sysin"),[])
         @inlets.bind(new Symbol("feedback"),[])
@@ -235,12 +354,12 @@ class System
             if @state[index]?
                 return @state[index]
             else
-                return S("Unknown")
+                return S("NotFound")
 
         if @state.length > 0
             return @state[@state.length - 1]
         else
-            return S("Unknown")
+            return S("NotFound")
 
     input: (data, inlet) ->
         data
@@ -303,10 +422,8 @@ class Wire
 
 class Connection
 
-    constructor: (source,  sink, @flow, wire) ->
-        @source = @flow.systems.symbol(source)
-        @sink = @flow.systems.symbol(sink)
-        @wire = wire || new Wire(@source.object.outlets.symbol("sysout"), @sink.object.inlets.symbol("sysin"))
+    constructor: (@source, @sink, @pl, @wire) ->
+
 
     transmit: (data) ->
         @sink.object.push(data, @wire.inlet.name)
@@ -317,43 +434,132 @@ class Store
     constructor: ->
         @entities = new NameSpace("entities")
 
-    add: (symbol, tags, props) ->
-        tags = tags || []
-        entity = new Entity(tags, props)
+    add: (entity) ->
+        symbol = S(entity.id)
         @entities.bind(symbol, entity)
         symbol
 
-    has: (name) ->
-        @entities.has(name)
-
-    entity: (name) ->
-        @entities.object(name)
-
-    remove: (name) ->
-        @entities.unbind(name)
-
-    id: (id) ->
+    snapshot: () ->
+        xml = '<?xml version = "1.0" standalone="yes"?>'
+        xml += "<snapshot>"
         for entity in @entities.objects()
-            if entity.id is id
-                return entity
+            xml += entity.serialize()
+        xml += "</snapshot>"
+        return xml
 
-        return null
+    op: (f, args...) ->
+        return f.apply(this, args)
 
-    removeId: (id) ->
-        for entity_symbol in @entities.symbols()
-            if entity_symbol.object is id
-                @entities.unbind(entity_symbol.name)
+    __process_scalar: (scalar) ->
+        type = scalar.getAttribute("type")
+        text = scalar.textContent
+        if type is "number"
+            value = Number(text)
+        else if type is "string"
+            value = String(text)
+        else if type is "boolean"
+            value = Boolean(text)
+        else if type is "array"
+            list_scalars = xpath.select("list/scalar", scalar)
+            value = []
+            for el in list_scalars
+                el_type = el.getAttribute("type")
+                el_text = el.textContent
+                if el_type is "number"
+                    el_value = Number(el_text)
+                else if el_type is "string"
+                    el_value = String(el_text)
+                else if el_type is "boolean"
+                    el_value = Boolean(el_text)
+                value.push(el_value)
 
-        return null
+        return value
 
-    tags: (tags) ->
+    __process_prop: (prop) ->
+        entity_prop = {}
+        slot = prop.getAttribute("slot")
+        scalar = xpath.select("scalar", prop )
+        value = @__process_scalar(scalar[0])
+        entity_prop.slot = slot
+        entity_prop.value = value
+        entity_prop
+
+    recover: (xml) ->
+        doc = new dom().parseFromString(xml)
+        entities = xpath.select("//entity", doc)
+        entities_list = []
+        for entity in entities
+            entity_props = {}
+            props = xpath.select("property", entity)
+            for prop in props
+                entity_prop = @__process_prop(prop)
+                entity_props[entity_prop.slot] = entity_prop.value
+
+            new_entity = new Entity(null, entity_props)
+
+            parts = xpath.select("part", entity)
+            for part in parts
+                name = part.getAttribute("name")
+                part_props = {}
+                props = xpath.select("property", part)
+                for prop in props
+                    part_prop = @__process_prop(prop)
+                    part_props[part_prop.slot] = part_prop.value
+                entity_part = new Part(name, part_props)
+                new_entity.add(entity_part)
+
+            entities_list.push(new_entity)
+
+        for entity in entities_list
+            console.log(entity)
+            @add(entity)
+
+    has: (id) ->
+        @entities.has(id)
+
+    entity: (id) ->
+        @entities.object(id)
+
+    remove: (id) ->
+        @entities.unbind(id)
+
+    by_prop: (prop) ->
+        entities = []
+        for entity in @entities.objects()
+            if entity.has(prop.slot)
+                if entity.slot(prop.slot) is prop.value
+                    entities.push(entity)
+
+        if entities.length > 0
+            return entities
+        else
+            G("NotFound")
+
+    first_by_prop: (prop) ->
+        entities = @by_prop(prop)
+        if entities instanceof Glitch
+            return entities
+        else
+            entities[0]
+
+    by_tags: (tags) ->
         entities = []
         for entity in @entities.objects()
             for tag in tags
                 if tag in entity.tags
                     entities.push entity
 
-        return entities
+        if entities.length > 0
+            return entities
+        else
+            G("NotFound")
+
+    first_by_tags: (tags) ->
+        entities = @by_tags(tags)
+        if entities instanceof Glitch
+            return entities
+        else
+            entities[0]
 
 class Bus extends NameSpace
 
@@ -362,21 +568,28 @@ class Bus extends NameSpace
 
     trigger: (signal) ->
         for obj in @objects()
-              obj.raise(signal)
+            if obj instanceof System
+                obj.raise(signal)
 
-class Flow
+class Pipeline
 
-    constructor: (connectionClass, storeClass, busClass) ->
+    constructor: (name, connectionClass, storeClass, busClass) ->
         storeClass = storeClass || Store
         busClass = busClass || Bus
+
         @connectionClass = connectionClass || Connection
         @store = new storeClass()
-        @bus = new busClass("systems")
-        @systems = @bus
         @connections = new NameSpace("bus.connections")
 
-    connect: (source, sink, wire, symbol) ->
+        @bus = new busClass("systems")
+        @systems = @bus
+        @bus.bind(S("connections"),  @connections)
+        @bus.bind(S("store"), @store)
 
+    connect: (source, sink, wire, symbol) ->
+        source = @systems.symbol(source)
+        sink = @systems.symbol(sink)
+        wire = wire || new Wire(source.object.outlets.symbol("sysout"), sink.object.inlets.symbol("sysin"))
         connection = new @connectionClass(source, sink, this, wire)
         if !symbol
             name = "#{source}::#{connection.wire.outlet.name}-#{sink}::#{connection.wire.inlet.name}"
@@ -432,18 +645,22 @@ exports.D = D
 exports.Signal = Signal
 exports.Event = Event
 exports.Glitch = Glitch
+exports.G = G
 exports.Token = Token
 exports.start = start
 exports.stop = stop
 exports.T = T
-exports.Component = Component
+exports.Part = Part
+exports.P = P
 exports.Entity = Entity
+exports.E = E
 exports.Cell = Cell
+exports.C = C
 exports.System = System
 exports.Wire = Wire
 exports.Connection = Connection
 exports.Store = Store
 exports.Bus = Bus
-exports.Flow = Flow
+exports.Pipeline = Pipeline
 exports.mixins = mixins
 
