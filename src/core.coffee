@@ -338,7 +338,7 @@ C = (tags, props) ->
 
 class System
 
-    constructor: (@pl, @conf) ->
+    constructor: (@b, @conf) ->
         @inlets = new NameSpace("inlets")
         @inlets.bind(new Symbol("sysin"),[])
         @inlets.bind(new Symbol("feedback"),[])
@@ -422,7 +422,7 @@ class Wire
 
 class Connection
 
-    constructor: (@source, @sink, @pl, @wire) ->
+    constructor: (@source, @sink, @b, @wire) ->
 
 
     transmit: (data) ->
@@ -571,7 +571,7 @@ class Bus extends NameSpace
             if obj instanceof System
                 obj.raise(signal)
 
-class Pipeline
+class Board
 
     constructor: (name, connectionClass, storeClass, busClass) ->
         storeClass = storeClass || Store
@@ -661,6 +661,6 @@ exports.Wire = Wire
 exports.Connection = Connection
 exports.Store = Store
 exports.Bus = Bus
-exports.Pipeline = Pipeline
+exports.Board = Board
 exports.mixins = mixins
 

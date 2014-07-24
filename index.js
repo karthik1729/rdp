@@ -26,7 +26,7 @@ exports.Wire = core.Wire;
 exports.Connection = core.Connection;
 exports.Store = core.Store;
 exports.Bus = core.Bus;
-exports.Pipeline = core.Pipeline;
+exports.Board = core.Board;
 
 exports.mixins = mixins;
 exports.helpers = helpers;

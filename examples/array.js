@@ -4,7 +4,7 @@ var O_O = require("../index.js"),
 
 yx.__extends(ArrayGenerator, O_O.System);
 
-function ArrayGenerator(pl, conf) {
+function ArrayGenerator(b, conf) {
 
     ArrayGenerator.__super__.constructor.apply(this, arguments);
     this.values = [];
@@ -26,7 +26,7 @@ ArrayGenerator.prototype.push = function (token) {
 
 yx.__extends(RangeAverageFilter, O_O.System);
 
-function RangeAverageFilter (pl, conf) {
+function RangeAverageFilter (b, conf) {
     RangeAverageFilter.__super__.constructor.apply(this, arguments);
     this.range = [];
 }
@@ -51,7 +51,7 @@ RangeAverageFilter.prototype.push = function (data) {
 
 yx.__extends(ConsoleDumper, O_O.System);
 
-function ConsoleDumper(pl, conf) {
+function ConsoleDumper(b, conf) {
     ConsoleDumper.__super__.constructor.apply(this, arguments);
 }
 
@@ -59,15 +59,15 @@ ConsoleDumper.prototype.push = function (data) {
     console.log(data);
 }
 
-var pl = new O_O.Pipeline("ag");
+var b = new O_O.Board("ag");
 
-pl.add( O_O.S("gen1"), ArrayGenerator);
-pl.add( O_O.S("range-avg1"), RangeAverageFilter)
+b.add( O_O.S("gen1"), ArrayGenerator);
+b.add( O_O.S("range-avg1"), RangeAverageFilter)
 
-pl.connect( "gen1", "range-avg1");
-pl.add( O_O.S("condump"), ConsoleDumper)
-pl.connect( "range-avg1", "condump");
+b.connect( "gen1", "range-avg1");
+b.add( O_O.S("condump"), ConsoleDumper)
+b.connect( "range-avg1", "condump");
 
-pl.systems.object("gen1").push( O_O.T("start"));
+b.systems.object("gen1").push( O_O.T("start"));
 
 
