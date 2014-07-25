@@ -1,6 +1,5 @@
 var core = require("./lib/core.js");
-var mixins = require("./lib/mixins.js");
-var helpers = require("./lib/helpers.js");
+var instrus = require("./lib/instrus.js");
 
 exports.Symbol = core.Symbol;
 exports.NameSpace = core.NameSpace;
@@ -28,6 +27,5 @@ exports.Store = core.Store;
 exports.Bus = core.Bus;
 exports.Board = core.Board;
 
-exports.mixins = mixins;
-exports.helpers = helpers;
+exports.instrus = instrus;
 

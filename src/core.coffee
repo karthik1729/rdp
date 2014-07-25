@@ -12,6 +12,12 @@ class Symbol
         if attrs?
             @attrs(attrs)
 
+    full_name: ->
+       if @ns?
+           return @ns.name + @ns.sep + @name
+        else
+           return @name
+
     attr: (k, v) ->
         if v
             @[k] = v
@@ -34,11 +40,6 @@ class Symbol
         else
             return false
 
-    toString: ->
-       if @ns?
-           return @ns.name + @ns.sep + @name
-        else
-           return @name
 
 S = (name, object, ns, attrs) ->
     return new Symbol(name, object, ns, attrs)
@@ -158,24 +159,27 @@ class Data
     validate: ->
         true
 
+    __serialize_scalar: (scalar) ->
+        xml = ""
+        if Array.isArray(scalar)
+            type = "array"
+            xml += "<scalar type='#{type}'>"
+            xml += "<list>"
+            for e in scalar
+                xml += @__serialize_scalar(e)
+            xml += "</list>"
+            xml += "</scalar>"
+        else
+            type = typeof scalar
+            xml += "<scalar type='#{type}'>#{scalar.toString()}</scalar>"
+        xml
 
     serialize: ->
         xml = ""
         for name in @slots()
             xml += "<property slot='#{name}'>"
             scalar  = @slot(name)
-            if Array.isArray(scalar)
-                type = "array"
-                xml += "<scalar type='#{type}'>"
-                xml += "<list>"
-                for e in scalar
-                    type = typeof e
-                    xml += "<scalar type='#{type}'>#{e}</scalar>"
-                xml += "</list>"
-                xml += "</scalar>"
-            else
-                type = typeof scalar
-                xml += "<scalar type='#{type}'>#{scalar.toString()}</scalar>"
+            xml += @__serialize_scalar(scalar)
             xml += '</property>'
         xml
 
@@ -199,9 +203,10 @@ class Event extends Signal
 
 class Glitch extends Data
 
-    constructor: (name, props) ->
+    constructor: (name, context, props) ->
         props = props || {}
         props.name = name
+        props.contenxt = contenxt
         super(props)
 
 G = (name, props) ->
@@ -410,6 +415,9 @@ class System
     raise: (signal) ->
         @react(signal)
 
+    interrupt: (signal) ->
+        @react(signal)
+
     react: (signal) ->
 
     show: (data) ->
@@ -437,7 +445,7 @@ class Store
     add: (entity) ->
         symbol = S(entity.id)
         @entities.bind(symbol, entity)
-        symbol
+        entity
 
     snapshot: () ->
         xml = '<?xml version = "1.0" standalone="yes"?>'
@@ -463,14 +471,7 @@ class Store
             list_scalars = xpath.select("list/scalar", scalar)
             value = []
             for el in list_scalars
-                el_type = el.getAttribute("type")
-                el_text = el.textContent
-                if el_type is "number"
-                    el_value = Number(el_text)
-                else if el_type is "string"
-                    el_value = String(el_text)
-                else if el_type is "boolean"
-                    el_value = Boolean(el_text)
+                el_value = @__process_scalar(el)
                 value.push(el_value)
 
         return value
@@ -478,7 +479,7 @@ class Store
     __process_prop: (prop) ->
         entity_prop = {}
         slot = prop.getAttribute("slot")
-        scalar = xpath.select("scalar", prop )
+        scalar = xpath.select("scalar", prop)
         value = @__process_scalar(scalar[0])
         entity_prop.slot = slot
         entity_prop.value = value
@@ -511,7 +512,6 @@ class Store
             entities_list.push(new_entity)
 
         for entity in entities_list
-            console.log(entity)
             @add(entity)
 
     has: (id) ->
