@@ -1,8 +1,6 @@
 uuid = require "node-uuid"
 clone = require "clone"
 
-mixins = require "./mixins.js"
-
 xpath = require('xpath')
 dom = require('xmldom').DOMParser
 
@@ -662,5 +660,4 @@ exports.Connection = Connection
 exports.Store = Store
 exports.Bus = Bus
 exports.Board = Board
-exports.mixins = mixins
 
