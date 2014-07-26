@@ -1,5 +1,4 @@
 var core = require("./lib/core.js");
-var instrus = require("./lib/instrus.js");
 
 exports.Symbol = core.Symbol;
 exports.NameSpace = core.NameSpace;
@@ -27,5 +26,6 @@ exports.Store = core.Store;
 exports.Bus = core.Bus;
 exports.Board = core.Board;
 
-exports.instrus = instrus;
+exports.instrus = require("./lib/instrus.js");
+exports.helpers = require("./lib/helpers.js");
 

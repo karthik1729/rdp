@@ -204,7 +204,7 @@ class Glitch extends Data
     constructor: (name, context, props) ->
         props = props || {}
         props.name = name
-        props.contenxt = contenxt
+        props.contenxt = context
         super(props)
 
 G = (name, props) ->
@@ -372,43 +372,42 @@ class System
 
     STOP: (stop_token) ->
 
-    push: (data, inlet_name) ->
+    push: (data, inlet) ->
 
-        inlet_name = inlet_name || "sysin"
+        inlet = inlet || @inlets.symbol("sysin")
 
-        input_data = @input(data, inlet_name)
+        input_data = @input(data, inlet)
 
         if input_data instanceof Glitch
             @error(input_data)
         else
-            @process input_data, inlet_name
+            @process input_data, inlet
 
-    goto_with: (inlet_name, data) ->
-        @push(data, inlet_name)
+    goto_with: (inlet, data) ->
+        @push(data, inlet)
 
-    process: (data, inlet_name) ->
-        @emit(data, "stdout")
+    process: (data, inlet) ->
 
-    send: (data, outlet_name) ->
-        for outlet in @outlets.symbols()
-            if outlet.name == outlet_name
-                for connection in outlet.object
+    dispatch: (data, outlet) ->
+        for ol in @outlets.symbols()
+            if ol.name == outlet.name
+                for connection in ol.object
                     connection.object.transmit data
 
-    emit: (data, outlet_name) ->
-        outlet_name = outlet_name || "sysout"
+    emit: (data, outlet) ->
+        outlet = outlet || @outlets.symbol("sysout")
 
-        output_data = @output(data, outlet_name)
+        output_data = @output(data, outlet)
 
         if output_data instanceof Glitch
             @error(output_data)
             return
 
-        @send(output_data, outlet_name)
+        @dispatch(output_data, outlet)
 
 
     error: (data) ->
-        @send(data, "syserr")
+        @dispatch(data, @outlets.symbol("syserr"))
 
     raise: (signal) ->
         @react(signal)
@@ -432,7 +431,7 @@ class Connection
 
 
     transmit: (data) ->
-        @sink.object.push(data, @wire.inlet.name)
+        @sink.object.push(data, @wire.inlet)
 
 
 class Store
