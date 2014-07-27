@@ -38,7 +38,6 @@ class Symbol
         else
             return false
 
-
 S = (name, object, ns, attrs) ->
     return new Symbol(name, object, ns, attrs)
 
@@ -49,8 +48,10 @@ class NameSpace
     constructor: (@name, sep) ->
         @elements = {}
         @sep = sep || "."
+        @__gensym = 0
 
-    bind: (symbol, object) ->
+    bind: (symbol, object, class_name) ->
+        symbol.class = class_name || object.constructor.name
         name = symbol.name
         symbol.object = object
         object.symbol = symbol
@@ -62,7 +63,8 @@ class NameSpace
         symbol = @elements[name]
         delete @elements[name]
         symbol.ns = undefined
-        symbol
+        symbol.object = undefined
+        symbol.class = undefined
 
     symbol: (name) ->
         if @has(name)
@@ -97,6 +99,9 @@ class NameSpace
            objects.push(v.object)
 
        objects
+
+    gensym: ->
+        "gensym:" + (@__gensym++)
 
 
 class Data
@@ -341,7 +346,7 @@ C = (tags, props) ->
 
 class System
 
-    constructor: (@b, @conf) ->
+    constructor: (@b, conf) ->
         @inlets = new NameSpace("inlets")
         @inlets.bind(new Symbol("sysin"),[])
         @inlets.bind(new Symbol("feedback"),[])
@@ -349,6 +354,7 @@ class System
         @outlets.bind(new Symbol("sysout"),[])
         @outlets.bind(new Symbol("syserr"),[])
 
+        @conf = conf || D()
         @state = []
         @r = {}
 
@@ -391,8 +397,8 @@ class System
     dispatch: (data, outlet) ->
         for ol in @outlets.symbols()
             if ol.name == outlet.name
-                for connection in ol.object
-                    connection.object.transmit data
+                for wire in ol.object
+                    wire.object.transmit data
 
     emit: (data, outlet) ->
         outlet = outlet || @outlets.symbol("sysout")
@@ -419,20 +425,64 @@ class System
 
     show: (data) ->
 
+    serialize: ->
+        xml = "<system name='#{@symbol.name}' class='#{@symbol.class}'>"
+        xml += "<configuration>"
+        xml += @conf.serialize()
+        xml += "</configuration>"
+        xml += "</system>"
+        xml
+
 
 class Wire
 
-    constructor: (@outlet, @inlet) ->
-
-
-class Connection
-
-    constructor: (@source, @sink, @b, @wire) ->
-
+    constructor: (@b, source, sink, outlet, inlet) ->
+        outlet = outlet || "stdout"
+        inlet = inlet || "stdin"
+        @source = @b.systems.symbol(source)
+        @sink = @b.systems.symbol(sink)
+        @outlet = @source.object.outlets.symbol(outlet)
+        @inlet = @sink.object.inlets.symbol(inlet)
 
     transmit: (data) ->
-        @sink.object.push(data, @wire.inlet)
+        @sink.object.push(data, @inlet)
 
+    serialize: ->
+        xml = ""
+        xml += "<wire name='#{@symbol.name}'>"
+        xml += "<source name='#{@source.name}'/>"
+        xml += "<outlet name='#{@inlet.name}'/>"
+        xml += "<sink name='#{@sink.name}'/>"
+        xml += "<inlet name='#{@inlet.name}'/>"
+        xml += "</wire>"
+        xml
+
+__process_scalar = (scalar) ->
+        type = scalar.getAttribute("type")
+        text = scalar.textContent
+        if type is "number"
+            value = Number(text)
+        else if type is "string"
+            value = String(text)
+        else if type is "boolean"
+            value = Boolean(text)
+        else if type is "array"
+            list_scalars = xpath.select("list/scalar", scalar)
+            value = []
+            for el in list_scalars
+                el_value = __process_scalar(el)
+                value.push(el_value)
+
+        return value
+
+__process_prop: (prop) ->
+        entity_prop = {}
+        slot = prop.getAttribute("slot")
+        scalar = xpath.select("scalar", prop)
+        value = __process_scalar(scalar[0])
+        entity_prop.slot = slot
+        entity_prop.value = value
+        entity_prop
 
 class Store
 
@@ -455,33 +505,6 @@ class Store
     op: (f, args...) ->
         return f.apply(this, args)
 
-    __process_scalar: (scalar) ->
-        type = scalar.getAttribute("type")
-        text = scalar.textContent
-        if type is "number"
-            value = Number(text)
-        else if type is "string"
-            value = String(text)
-        else if type is "boolean"
-            value = Boolean(text)
-        else if type is "array"
-            list_scalars = xpath.select("list/scalar", scalar)
-            value = []
-            for el in list_scalars
-                el_value = @__process_scalar(el)
-                value.push(el_value)
-
-        return value
-
-    __process_prop: (prop) ->
-        entity_prop = {}
-        slot = prop.getAttribute("slot")
-        scalar = xpath.select("scalar", prop)
-        value = @__process_scalar(scalar[0])
-        entity_prop.slot = slot
-        entity_prop.value = value
-        entity_prop
-
     recover: (xml) ->
         doc = new dom().parseFromString(xml)
         entities = xpath.select("//entity", doc)
@@ -490,7 +513,7 @@ class Store
             entity_props = {}
             props = xpath.select("property", entity)
             for prop in props
-                entity_prop = @__process_prop(prop)
+                entity_prop = __process_prop(prop)
                 entity_props[entity_prop.slot] = entity_prop.value
 
             new_entity = new Entity(null, entity_props)
@@ -501,7 +524,7 @@ class Store
                 part_props = {}
                 props = xpath.select("property", part)
                 for prop in props
-                    part_prop = @__process_prop(prop)
+                    part_prop = __process_prop(prop)
                     part_props[part_prop.slot] = part_prop.value
                 entity_part = new Part(name, part_props)
                 new_entity.add(entity_part)
@@ -558,6 +581,7 @@ class Store
         else
             entities[0]
 
+
 class Bus extends NameSpace
 
     constructor: (@name, sep) ->
@@ -570,54 +594,100 @@ class Bus extends NameSpace
 
 class Board
 
-    constructor: (name, connectionClass, storeClass, busClass) ->
-        storeClass = storeClass || Store
-        busClass = busClass || Bus
+    constructor: (name, wireClass, busClass, storeClass) ->
+        @wireClass = wireClass || Wire
+        @busClass = busClass || Bus
+        @storeClass = storeClass || Store
 
-        @connectionClass = connectionClass || Connection
-        @store = new storeClass()
-        @connections = new NameSpace("bus.connections")
+        @store = new @storeClass()
+        @wires = new NameSpace("bus.wires")
 
-        @bus = new busClass("systems")
+        @bus = new @busClass("systems")
         @systems = @bus
-        @bus.bind(S("connections"),  @connections)
+        @bus.bind(S("wires"),  @wires)
         @bus.bind(S("store"), @store)
 
-    connect: (source, sink, wire, symbol) ->
-        source = @systems.symbol(source)
-        sink = @systems.symbol(sink)
-        wire = wire || new Wire(source.object.outlets.symbol("sysout"), sink.object.inlets.symbol("sysin"))
-        connection = new @connectionClass(source, sink, this, wire)
-        if !symbol
-            name = "#{source}::#{connection.wire.outlet.name}-#{sink}::#{connection.wire.inlet.name}"
-            symbol = new Symbol(name)
-        @connections.bind(symbol, connection)
+    setup: (xml) ->
+        if xml
+            doc = new dom().parseFromString(xml)
+            board = xpath.select("board", doc)
+            board_name = board.getAttribute("name")
+            bus_class = xpath.select("Bus", doc).getAttribute("class")
+            store_class = xpath.select("Store", doc).getAttribute("class")
+            wire_class = xpath.select("Wire", doc).getAttribute("class")
 
-        for outlet in connection.source.object.outlets.symbols()
-            if outlet.name is connection.wire.outlet.name
-                outlet.object.push(symbol)
+            board_new = new Board(board_nam, global[wire_class], global[bus_class], global[store_class])
+
+            syss = xpath.select("//system", doc)
+            for sys in syss
+                name = sys.getAttribute("name")
+                klass = sys.getAttribute("class")
+                conf_node = xpath.select("/configuration", sys)
+                data_props = {}
+                props = xpath.select("/property", conf_node)
+                for prop in props
+                    data_prop = __process_prop(prop)
+                    data_props[data_prop.slot] = data_prop.value
+
+                board_new.add(O_O.S(name), global[klass], D(props))
+
+            wires = xpath.select("//wire", doc)
+            for conn in conns
+                source_name = xpath.select("source", conn).getAttribute("name")
+                outlet_name = xpath.select("outlet", conn).getAttribute("name")
+                sink_name = xpath.select("sink", conn).getAttribute("name")
+                inlet_name = xpath.select("inlet", conn).getAttribute("name")
+
+                board_new.add(source_name, sink_name, outlet_name, inlet_name)
+
+            return board_new
+
+        else
+            xml = '<?xml version = "1.0" standalone="yes"?>'
+            xml += "<board name='#{@name}'>"
+            xml += "<Bus class='#{@bus.constructor.name}'/>"
+            xml += "<Store class='#{@store.constructor.name}'/>"
+            xml += "<Wire class='#{@wireClass.name}'/>"
+            for sys in @systems.symbols()
+                if sys.name not in ["wires", "store"]
+                    xml += sys.object.serialize()
+            for conn in @wires.symbols()
+                xml += conn.object.serialize()
+            xml += "</board>"
+
+
+    connect: (source, sink, outlet, inlet, symbol) ->
+        wire = new @wireClass(this, source, sink, outlet, inlet)
+        if !symbol
+            name = @bus.gensym()
+            symbol = new Symbol(name)
+        @wires.bind(symbol, wire)
+
+        for source_outlet in wire.source.object.outlets.symbols()
+            if source_outlet.name is wire.outlet.name
+                source_outlet.object.push(symbol)
 
     pipe: (source, wire, sink) ->
         @connect(source, sink, wire)
 
     disconnect: (name) ->
-        connection = @connection(name)
-        @connections.unbind(name)
+        wire = @wire(name)
+        @wires.unbind(name)
 
-        for outlet in connection.source.object.outlets.symbols()
-            if outlet.name is connection.wire.outlet.name
-                connections = []
+        for outlet in wire.source.object.outlets.symbols()
+            if outlet.name is wire.outlet.name
+                wires = []
                 for conn in outlet.object
                     if conn.name != name
-                        connections.push(conn)
-                outlet.object = connections
+                        wires.push(conn)
+                outlet.object = wires
 
 
-    connection: (name) ->
-        @connections.object(name)
+    wire: (name) ->
+        @wires.object(name)
 
-    hasConnection: (name) ->
-        @connections.has(name)
+    haswire: (name) ->
+        @wires.has(name)
 
     add: (symbol, systemClass, conf) ->
         system = new systemClass(this, conf)
@@ -655,7 +725,6 @@ exports.Cell = Cell
 exports.C = C
 exports.System = System
 exports.Wire = Wire
-exports.Connection = Connection
 exports.Store = Store
 exports.Bus = Bus
 exports.Board = Board

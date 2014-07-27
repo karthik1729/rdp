@@ -21,7 +21,6 @@ exports.Cell = core.Cell;
 exports.C = core.C;
 exports.System = core.System;
 exports.Wire = core.Wire;
-exports.Connection = core.Connection;
 exports.Store = core.Store;
 exports.Bus = core.Bus;
 exports.Board = core.Board;
