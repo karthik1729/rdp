@@ -100,8 +100,9 @@ class NameSpace
 
        objects
 
-    gensym: ->
-        "gensym:" + (@__gensym++)
+    gensym: (prefix) ->
+        prefix = prefix || "gensym"
+        prefix + ":" + (@__gensym++)
 
 
 class Data
@@ -437,8 +438,8 @@ class System
 class Wire
 
     constructor: (@b, source, sink, outlet, inlet) ->
-        outlet = outlet || "stdout"
-        inlet = inlet || "stdin"
+        outlet = outlet || "sysout"
+        inlet = inlet || "sysin"
         @source = @b.systems.symbol(source)
         @sink = @b.systems.symbol(sink)
         @outlet = @source.object.outlets.symbol(outlet)
@@ -451,7 +452,7 @@ class Wire
         xml = ""
         xml += "<wire name='#{@symbol.name}'>"
         xml += "<source name='#{@source.name}'/>"
-        xml += "<outlet name='#{@inlet.name}'/>"
+        xml += "<outlet name='#{@outlet.name}'/>"
         xml += "<sink name='#{@sink.name}'/>"
         xml += "<inlet name='#{@inlet.name}'/>"
         xml += "</wire>"
@@ -475,7 +476,7 @@ __process_scalar = (scalar) ->
 
         return value
 
-__process_prop: (prop) ->
+__process_prop = (prop) ->
         entity_prop = {}
         slot = prop.getAttribute("slot")
         scalar = xpath.select("scalar", prop)
@@ -594,57 +595,67 @@ class Bus extends NameSpace
 
 class Board
 
-    constructor: (name, wireClass, busClass, storeClass) ->
+    constructor: (wireClass, busClass, storeClass) ->
         @wireClass = wireClass || Wire
         @busClass = busClass || Bus
         @storeClass = storeClass || Store
 
+        @init()
+
+    init: ->
+        @bus = new @busClass("bus")
         @store = new @storeClass()
-        @wires = new NameSpace("bus.wires")
-
-        @bus = new @busClass("systems")
         @systems = @bus
-        @bus.bind(S("wires"),  @wires)
-        @bus.bind(S("store"), @store)
+        @wires = new NameSpace("wires")
 
-    setup: (xml) ->
+        @bus.bind(S("store"), @store)
+        @bus.bind(S("wires"), @wires)
+
+    setup: (xml, clone) ->
         if xml
             doc = new dom().parseFromString(xml)
-            board = xpath.select("board", doc)
+            board = xpath.select("board", doc)[0]
             board_name = board.getAttribute("name")
-            bus_class = xpath.select("Bus", doc).getAttribute("class")
-            store_class = xpath.select("Store", doc).getAttribute("class")
-            wire_class = xpath.select("Wire", doc).getAttribute("class")
+            bus_class = xpath.select("Bus", board)[0].getAttribute("class")
+            store_class = xpath.select("Store", board)[0].getAttribute("class")
+            wire_class = xpath.select("Wire", board)[0].getAttribute("class")
 
-            board_new = new Board(board_nam, global[wire_class], global[bus_class], global[store_class])
+            if clone
+                board_new = new Board(board_name, global[wire_class], global[bus_class], global[store_class])
+            else
+                board_new = @
+                board_new.init()
 
-            syss = xpath.select("//system", doc)
+            syss = xpath.select("system", board)
             for sys in syss
                 name = sys.getAttribute("name")
                 klass = sys.getAttribute("class")
-                conf_node = xpath.select("/configuration", sys)
+                conf_node = xpath.select("configuration", sys)[0]
                 data_props = {}
-                props = xpath.select("/property", conf_node)
+                props = xpath.select("//property", conf_node)
                 for prop in props
                     data_prop = __process_prop(prop)
                     data_props[data_prop.slot] = data_prop.value
 
-                board_new.add(O_O.S(name), global[klass], D(props))
+                board_new.add(S(name), global[klass], D(data_props))
 
-            wires = xpath.select("//wire", doc)
-            for conn in conns
-                source_name = xpath.select("source", conn).getAttribute("name")
-                outlet_name = xpath.select("outlet", conn).getAttribute("name")
-                sink_name = xpath.select("sink", conn).getAttribute("name")
-                inlet_name = xpath.select("inlet", conn).getAttribute("name")
+            wires = xpath.select("//wire", board)
+            for wire in wires
+                source_name = xpath.select("source", wire)[0].getAttribute("name")
+                outlet_name = xpath.select("outlet", wire)[0].getAttribute("name")
+                sink_name = xpath.select("sink", wire)[0].getAttribute("name")
+                inlet_name = xpath.select("inlet", wire)[0].getAttribute("name")
 
-                board_new.add(source_name, sink_name, outlet_name, inlet_name)
+                board_new.connect(source_name, sink_name, outlet_name, inlet_name)
 
             return board_new
-
         else
             xml = '<?xml version = "1.0" standalone="yes"?>'
-            xml += "<board name='#{@name}'>"
+            if @symbol?
+                board_name = @symbol.name
+            else
+                board_name = "b"
+            xml += "<board name='#{board_name}'>"
             xml += "<Bus class='#{@bus.constructor.name}'/>"
             xml += "<Store class='#{@store.constructor.name}'/>"
             xml += "<Wire class='#{@wireClass.name}'/>"
@@ -659,7 +670,7 @@ class Board
     connect: (source, sink, outlet, inlet, symbol) ->
         wire = new @wireClass(this, source, sink, outlet, inlet)
         if !symbol
-            name = @bus.gensym()
+            name = @bus.gensym("wire")
             symbol = new Symbol(name)
         @wires.bind(symbol, wire)
 
