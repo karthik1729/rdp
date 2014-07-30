@@ -1,3 +1,4 @@
+uuid = require("node-uuid")
 clone = require "clone"
 xpath = require('xpath')
 dom = require('xmldom').DOMParser
