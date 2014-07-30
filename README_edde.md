@@ -1,7 +1,9 @@
+迁
+
 RDP -- Reactive Data (Flow) Processing
 ======================================
 
-Read [this](http://lexical.foobar.systems/rdp.html).
+Read [this](http://lexical.foobar.systems/rdp.html)
 
 Install
 =======
@@ -11,10 +13,12 @@ Install
 API
 ===
 
+```js
 >>ed
 !cat examples/array.js
 q
 __END__
+```
 
 Status
 ======

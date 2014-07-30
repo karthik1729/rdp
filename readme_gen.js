@@ -8,5 +8,5 @@ var options = {
     dir: "."
 }
 
-edde.compile("*edde.txt", options);
+edde.compile("*edde.md", options);
 
