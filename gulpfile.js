@@ -4,7 +4,7 @@ var gutil = require('gulp-util'),
     coffee = require('gulp-coffee');
 
 gulp.task('coffee', function() {
-  gulp.src('./src/core.coffee')
+  gulp.src('./src/*.coffee')
     .pipe(sourcemaps.init())
     .pipe(coffee({bare: true}).on('error', gutil.log))
     .pipe(sourcemaps.write())

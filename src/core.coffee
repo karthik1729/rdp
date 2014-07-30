@@ -1,8 +1,7 @@
-uuid = require "node-uuid"
 clone = require "clone"
-
 xpath = require('xpath')
 dom = require('xmldom').DOMParser
+dom2prop = require('./helpers').dom2prop
 
 class Symbol
 
@@ -458,32 +457,7 @@ class Wire
         xml += "</wire>"
         xml
 
-__process_scalar = (scalar) ->
-        type = scalar.getAttribute("type")
-        text = scalar.textContent
-        if type is "number"
-            value = Number(text)
-        else if type is "string"
-            value = String(text)
-        else if type is "boolean"
-            value = Boolean(text)
-        else if type is "array"
-            list_scalars = xpath.select("list/scalar", scalar)
-            value = []
-            for el in list_scalars
-                el_value = __process_scalar(el)
-                value.push(el_value)
 
-        return value
-
-__process_prop = (prop) ->
-        entity_prop = {}
-        slot = prop.getAttribute("slot")
-        scalar = xpath.select("scalar", prop)
-        value = __process_scalar(scalar[0])
-        entity_prop.slot = slot
-        entity_prop.value = value
-        entity_prop
 
 class Store
 
@@ -514,7 +488,7 @@ class Store
             entity_props = {}
             props = xpath.select("property", entity)
             for prop in props
-                entity_prop = __process_prop(prop)
+                entity_prop = dom2prop(prop)
                 entity_props[entity_prop.slot] = entity_prop.value
 
             new_entity = new Entity(null, entity_props)
@@ -525,7 +499,7 @@ class Store
                 part_props = {}
                 props = xpath.select("property", part)
                 for prop in props
-                    part_prop = __process_prop(prop)
+                    part_prop = dom2prop(prop)
                     part_props[part_prop.slot] = part_prop.value
                 entity_part = new Part(name, part_props)
                 new_entity.add(entity_part)
@@ -634,7 +608,7 @@ class Board
                 data_props = {}
                 props = xpath.select("//property", conf_node)
                 for prop in props
-                    data_prop = __process_prop(prop)
+                    data_prop = dom2prop(prop)
                     data_props[data_prop.slot] = data_prop.value
 
                 board_new.add(S(name), global[klass], D(data_props))

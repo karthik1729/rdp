@@ -31,7 +31,6 @@
   "dependencies": {
       "yx": "*",
       "clone": "*",
-      "node-uuid": "*",
       "xmldom": "*",
       "xpath": "*"
   },
