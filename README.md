@@ -1,6 +1,6 @@
 # 迁
 
-### RDP -- Reactive Data (Flow) Processing
+### RDP -- Reactive Data Processing
 
 Read [this](http://lexical.foobar.systems/rdp.html)
 
