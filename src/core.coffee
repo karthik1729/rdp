@@ -122,6 +122,9 @@ class Data
 
         return true
 
+    prop: (k, v) ->
+        @slot(k,v)
+
     props: (kv) ->
         if kv
             for k, v of kv
@@ -359,6 +362,7 @@ class System
         @outlets = new NameSpace("outlets")
         @outlets.bind(new Symbol("sysout"),[])
         @outlets.bind(new Symbol("syserr"),[])
+        @outlets.bind(new Symbol("debug"),[])
 
         @conf = conf || D()
         @state = []
@@ -417,6 +421,8 @@ class System
 
         @dispatch(output_data, outlet)
 
+    debug: (data) ->
+        @dispatch(data, @outlets.symbol("debug"))
 
     error: (data) ->
         @dispatch(data, @outlets.symbol("syserr"))
