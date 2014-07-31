@@ -1,8 +1,9 @@
-uuid = require("node-uuid")
+uuid = require "node-uuid" 
+lodash = require "lodash"
 clone = require "clone"
-xpath = require('xpath')
-dom = require('xmldom').DOMParser
-dom2prop = require('./helpers').dom2prop
+xpath = require "xpath"
+dom = require("xmldom").DOMParser
+dom2prop = require("./helpers").dom2prop
 
 class Symbol
 
@@ -17,8 +18,9 @@ class Symbol
            return @name
 
     attr: (k, v) ->
-        if v
+        if v?
             @[k] = v
+            @[k]
         else
             @[k]
 
@@ -115,7 +117,7 @@ class Data
     is: (data) ->
         all_slots = @slots()
         for name in data.slots()
-            if data.slot(name) is not @slot(name)
+            if data.slot(name) != @slot(name)
                 return false
 
         return true
@@ -134,13 +136,13 @@ class Data
             return properties
 
     slots: (name) ->
-        if name
+        if name?
             @__slots.push(name)
         else
             @__slots
 
     slot: (name, value) ->
-        if value
+        if value?
             @[name] = value
             if name not in @slots()
                 @slots(name)
@@ -221,6 +223,7 @@ class Token extends Data
     constructor: (value, sign, props)  ->
         super(props)
         @signs = []
+        @values = []
         @stamp(sign, value)
 
     is: (t) ->
@@ -242,13 +245,14 @@ class Token extends Data
            return S("NotFound")
 
     stamp: (sign, value) ->
-        if value
+        if value?
             if @[value]
                 delete @[value]
             @value = value
             if typeof @value is "string"
                 @[@value] = true
-        if sign?
+            @values.push(value)
+        if sign
             @signs.push(sign)
         else
             @signs.push(S("Unknown"))
@@ -282,6 +286,7 @@ class Entity extends Data
         @parts = new NameSpace("parts")
         props = props || {}
         props.id = props.id || uuid.v4()
+        props.ts = props.ts || new Date().getTime()
         tags = tags || props.tags || []
         props.tags = tags
         super(props)
@@ -523,7 +528,11 @@ class Store
         entities = []
         for entity in @entities.objects()
             if entity.has(prop.slot)
-                if entity.slot(prop.slot) is prop.value
+                entity_value = entity.slot(prop.slot)
+                if Array.isArray(entity_value)
+                    if prop.value in entity_value
+                        entities.push(entity)
+                else if entity_value is prop.value
                     entities.push(entity)
 
         if entities.length > 0
@@ -587,7 +596,7 @@ class Board
         @bus.bind(S("wires"), @wires)
 
     setup: (xml, clone) ->
-        if xml
+        if xml?
             doc = new dom().parseFromString(xml)
             board = xpath.select("board", doc)[0]
             board_name = board.getAttribute("name")
@@ -595,7 +604,7 @@ class Board
             store_class = xpath.select("Store", board)[0].getAttribute("class")
             wire_class = xpath.select("Wire", board)[0].getAttribute("class")
 
-            if clone
+            if clone?
                 board_new = new Board(board_name, global[wire_class], global[bus_class], global[store_class])
             else
                 board_new = @
