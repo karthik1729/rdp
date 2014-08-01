@@ -11,12 +11,6 @@ class Symbol
         if attrs?
             @attrs(attrs)
 
-    full_name: ->
-       if @ns?
-           return @ns.name + @ns.sep + @name
-        else
-           return @name
-
     attr: (k, v) ->
         if v?
             @[k] = v
@@ -39,6 +33,13 @@ class Symbol
                 return true
         else
             return false
+
+    toString: ->
+       if @ns?
+           return @ns.name + @ns.sep + @name
+        else
+           return @name
+
 
 S = (name, object, ns, attrs) ->
     return new Symbol(name, object, ns, attrs)
@@ -159,6 +160,17 @@ class Data
             else
                 G("NotFound")
 
+    del: (name) ->
+        if @has(name)
+            slots_old = @__slots
+            @__slots = []
+            for n in slots_old
+                if n != name
+                    @__slots.push(n)
+
+            delete @[name]
+
+
     has: (name) ->
         if name in @slots()
             return true
@@ -182,6 +194,14 @@ class Data
             type = typeof scalar
             xml += "<scalar type='#{type}'>#{scalar.toString()}</scalar>"
         xml
+
+    init: (xml) ->
+        doc = new dom().parseFromString(xml)
+        props = xpath.select("property", doc)
+        for prop in props
+            data_prop = dom2prop(prop)
+            @prop(data_prop.slot, data_prop.value)
+
 
     serialize: ->
         xml = ""
@@ -227,13 +247,14 @@ class Token extends Data
         super(props)
         @signs = []
         @values = []
-        @stamp(sign, value)
+        if value?
+            @stamp(sign, value)
 
     is: (t) ->
         false
 
     value: ->
-        @value
+        @prop("value")
 
     stamp_by: (index) ->
         if index?
@@ -249,11 +270,13 @@ class Token extends Data
 
     stamp: (sign, value) ->
         if value?
-            if @[value]
-                delete @[value]
-            @value = value
-            if typeof @value is "string"
-                @[@value] = true
+            if @has("value")
+                old_value = @prop("value")
+                @del("value")
+                @del(value)
+            @prop("value", value)
+            if typeof value is "string"
+                @prop(value, true)
             @values.push(value)
         if sign
             @signs.push(sign)
@@ -326,7 +349,7 @@ class Cell extends Entity
 
     notify: (event) ->
        for ob in @observers.objects()
-            ob.raise(event)
+            ob.interrupt(event)
 
     add: (part) ->
         super part
@@ -389,6 +412,7 @@ class System
     STOP: (stop_token) ->
 
     push: (data, inlet) ->
+        @b.mirror.relay("push", @symbol.name, data, inlet)
 
         inlet = inlet || @inlets.symbol("sysin")
 
@@ -427,10 +451,8 @@ class System
     error: (data) ->
         @dispatch(data, @outlets.symbol("syserr"))
 
-    raise: (signal) ->
-        @react(signal)
-
     interrupt: (signal) ->
+        @b.mirror.relay("interrupt", @symbol.name, signal)
         @react(signal)
 
     react: (signal) ->
@@ -518,6 +540,7 @@ class Store
 
             entities_list.push(new_entity)
 
+        @entities = new NameSpace("entities")
         for entity in entities_list
             @add(entity)
 
@@ -581,20 +604,30 @@ class Bus extends NameSpace
     trigger: (signal) ->
         for obj in @objects()
             if obj instanceof System
-                obj.raise(signal)
+                obj.interrupt(signal)
+
+class Mirror
+    constructor: (@b) ->
+
+    reflect: (op, system, args...) ->
+        sys = @b.systems.object(system)
+        sys[op].apply(sys, args)
+
+    relay: (op, system, args...) ->
 
 class Board
 
-    constructor: (wireClass, busClass, storeClass) ->
+    constructor: (wireClass, busClass, storeClass, mirrorClass ) ->
         @wireClass = wireClass || Wire
         @busClass = busClass || Bus
         @storeClass = storeClass || Store
-
+        @mirrorClass = mirrorClass || Mirror
         @init()
 
     init: ->
         @bus = new @busClass("bus")
         @store = new @storeClass()
+        @mirror = new @mirrorClass(this)
         @systems = @bus
         @wires = new NameSpace("wires")
 
@@ -728,5 +761,6 @@ exports.System = System
 exports.Wire = Wire
 exports.Store = Store
 exports.Bus = Bus
+exports.Mirror = Mirror
 exports.Board = Board
 

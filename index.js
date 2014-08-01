@@ -23,6 +23,7 @@ exports.System = core.System;
 exports.Wire = core.Wire;
 exports.Store = core.Store;
 exports.Bus = core.Bus;
+exports.Mirror = core.Mirror;
 exports.Board = core.Board;
 
 exports.instrus = require("./lib/instrus.js");
