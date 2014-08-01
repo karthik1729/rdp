@@ -59,7 +59,7 @@ ConsoleDumper.prototype.push = function (data) {
     console.log(data);
 }
 
-var b = new O_O.Board("ag");
+var b = new O_O.Board();
 
 b.add( O_O.S("gen1"), ArrayGenerator);
 b.add( O_O.S("range-avg1"), RangeAverageFilter)
