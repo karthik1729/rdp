@@ -311,7 +311,6 @@ class Entity extends Data
     constructor: (tags, props) ->
         @parts = new NameSpace("parts")
         props = props || {}
-        props.id = props.id || uuid.v4()
         props.ts = props.ts || new Date().getTime()
         tags = tags || props.tags || []
         props.tags = tags
@@ -498,8 +497,10 @@ class Store
     constructor: ->
         @entities = new NameSpace("entities")
 
-    add: (entity) ->
-        symbol = S(entity.id)
+    add: (entity, symbol) ->
+        if not symbol
+            name = @entities.gensym("entity")
+            symbol = new Symbol(name)
         @entities.bind(symbol, entity)
         entity
 
@@ -544,14 +545,14 @@ class Store
         for entity in entities_list
             @add(entity)
 
-    has: (id) ->
-        @entities.has(id)
+    has: (name) ->
+        @entities.has(name)
 
-    entity: (id) ->
-        @entities.object(id)
+    entity: (name) ->
+        @entities.object(name)
 
-    remove: (id) ->
-        @entities.unbind(id)
+    remove: (name) ->
+        @entities.unbind(name)
 
     by_prop: (prop) ->
         entities = []
