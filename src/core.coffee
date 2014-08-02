@@ -21,6 +21,17 @@ class Symbol
     op: (f, args...) ->
         return f.apply(this, args)
 
+    has: (k) ->
+        if @[k]?
+            return true
+        else
+            return false
+
+    del: (k) ->
+        if @has(k)
+            delete @[k]
+
+
     attrs: (kv) ->
         for k, v in kv
             @[k] = v
@@ -192,7 +203,8 @@ class Data
             xml += "</scalar>"
         else
             type = typeof scalar
-            xml += "<scalar type='#{type}'>#{scalar.toString()}</scalar>"
+            if type in ["boolean", "number", "string", "Symbol" ]
+                xml += "<scalar type='#{type}'>#{scalar.toString()}</scalar>"
         xml
 
     init: (xml) ->
@@ -203,7 +215,7 @@ class Data
             @prop(data_prop.slot, data_prop.value)
 
 
-    serialize: ->
+    serialize: (to) ->
         xml = ""
         for name in @slots()
             xml += "<property slot='#{name}'>"
@@ -212,23 +224,25 @@ class Data
             xml += '</property>'
         xml
 
+    toString: ->
+
 D = (props) ->
     return new Data(props)
 
 class Signal extends Data
 
-    constructor: (name, payload, props) ->
+    constructor: (route, payload, props) ->
         props = props || {}
-        props.name = name
+        props.route = route
         props.payload = payload
         super(props)
 
 class Event extends Signal
 
-    constructor: (name, payload, props) ->
+    constructor: (route, payload, props) ->
         props = props || {}
         pops.ts = new Date().getTime()
-        super(name, payload, props)
+        super(route, payload, props)
 
 class Glitch extends Data
 
@@ -298,7 +312,7 @@ class Part extends Data
     constructor: (@name, props) ->
         super(props)
 
-    serialize: ->
+    serialize: (to) ->
         xml += "<part name='#{@name}'>"
         xml += super()
         xml += '</part>'
@@ -328,7 +342,7 @@ class Entity extends Data
     part: (name) ->
         @parts.symbol(name)
 
-    serialize: ->
+    serialize: (to) ->
         xml = "<entity>"
         xml += '<parts>'
         for part of @parts.objects()
@@ -458,7 +472,7 @@ class System
 
     show: (data) ->
 
-    serialize: ->
+    serialize: (to) ->
         xml = "<system name='#{@symbol.name}' class='#{@symbol.class}'>"
         xml += "<configuration>"
         xml += @conf.serialize()
@@ -602,10 +616,26 @@ class Bus extends NameSpace
     constructor: (@name, sep) ->
         super(@name, sep)
 
-    trigger: (signal) ->
-        for obj in @objects()
-            if obj instanceof System
-                obj.interrupt(signal)
+    trigger: (signal, broadcast) ->
+
+        broadcast = broadcast || false
+        interrupts = 0
+
+        if broadcast == false
+            for sym in @symbols()
+                if sym.object instanceof System
+                    if sym.has("route")
+                        if sym.attr("route") is signal.route
+                            sym.object.interrupt(signal)
+                            interrupts++
+
+        else if interrupts == 0 || broadcast == "true"
+            for sym in @symbols()
+                if sym.object instanceof System
+                    sym.object.interrupt(signal)
+                    interrupts++
+
+        interrupts
 
 class Mirror
     constructor: (@b) ->
