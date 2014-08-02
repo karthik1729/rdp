@@ -629,7 +629,7 @@ class Bus extends NameSpace
                             sym.object.interrupt(signal)
                             interrupts++
 
-        else if interrupts == 0 || broadcast == "true"
+        if (interrupts == 0) || (broadcast == true)
             for sym in @symbols()
                 if sym.object instanceof System
                     sym.object.interrupt(signal)
